@@ -1,30 +1,49 @@
 package methods
 
-// This file lists the HTTP methods as constants.
-//
-// HTTP methods, sometimes referred to as HTTP verbs,
-// are actions that the client can request from the server when making an HTTP request.
-//
-// Each method is followed by a comment that indicates the corresponding
-// section of the RFC (Request for Comments) document that defines the method.
-
 const (
-	// The CONNECT method establishes a tunnel to the server identified by the target resource. It is defined in section 4.3.6 of RFC 7231.
+	// The CONNECT method establishes a tunnel to the server identified by the target resource.
+	// This method is typically used for HTTPS connections through a proxy.
+	// RFC 7231, section 4.3.6 defines the semantics of the CONNECT method.
 	Connect = "CONNECT" // RFC 7231, 4.3.6
-	// The DELETE method is used to delete the specified resource. It is defined in section 4.3.5 of RFC 7231.
+
+	// The DELETE method requests the server to delete the specified resource.
+	// It is a commonly used method in RESTful APIs for resource deletion.
+	// The method is defined in RFC 7231, section 4.3.5.
 	Delete = "DELETE" // RFC 7231, 4.3.5
-	// The GET method is used to request data from a specified resource. It is one of the most common HTTP methods and is defined in section 4.3.1 of RFC 7231.
+
+	// The GET method is used to retrieve data from a specified resource.
+	// It is the most commonly used HTTP method and typically requests a representation of the resource.
+	// GET requests should not modify server state and are considered safe and idempotent.
+	// Defined in RFC 7231, section 4.3.1.
 	Get = "GET" // RFC 7231, 4.3.1
-	// The HEAD method is almost identical to GET, but without the response body. It is used to retrieve the meta-information written in HTTP headers, without transferring the entire content. It is defined in section 4.3.2 of RFC 7231.
+
+	// The HEAD method is similar to GET but does not return a message body in the response.
+	// It is used to retrieve the headers that a GET request would have obtained, often for checking the existence or meta-information of a resource.
+	// Defined in RFC 7231, section 4.3.2.
 	Head = "HEAD" // RFC 7231, 4.3.2
-	// The OPTIONS method is used to describe the communication options for the target resource. It is defined in section 4.3.7 of RFC 7231.
+
+	// The OPTIONS method is used to describe the communication options for the target resource.
+	// It allows a client to determine the capabilities of a server or a resource, such as which HTTP methods are supported.
+	// Defined in RFC 7231, section 4.3.7.
 	Options = "OPTIONS" // RFC 7231, 4.3.7
-	//  The PATCH method is used to apply partial modifications to a resource. It is defined in RFC 5789.
+
+	// The PATCH method applies partial modifications to a resource.
+	// Unlike PUT, which replaces the entire resource, PATCH allows updating only specific fields or data in the resource.
+	// It is defined in RFC 5789.
 	Patch = "PATCH" // RFC 5789
-	// The POST method is used to send data to a server to create/update a resource. It is defined in section 4.3.3 of RFC 7231.
+
+	// The POST method is used to send data to the server, usually resulting in the creation of a new resource or the modification of an existing one.
+	// It is often used in web forms and API calls where data is submitted for processing.
+	// Defined in RFC 7231, section 4.3.3.
 	Post = "POST" // RFC 7231, 4.3.3
-	// The PUT method is used to update a current resource with new data. It is defined in section 4.3.4 of RFC 7231.
+
+	// The PUT method replaces all current representations of the target resource with the uploaded content.
+	// It is commonly used in RESTful APIs to update a resource completely.
+	// Defined in RFC 7231, section 4.3.4.
 	Put = "PUT" // RFC 7231, 4.3.4
-	// The TRACE method performs a message loop-back test along the path to the target resource. It is defined in section 4.3.8 of RFC 7231.
+
+	// The TRACE method performs a message loop-back test along the path to the target resource.
+	// TRACE allows the client to see what is being received at the other end of the request chain and is mainly used for diagnostic purposes.
+	// Defined in RFC 7231, section 4.3.8.
 	Trace = "TRACE" // RFC 7231, 4.3.8
 )
