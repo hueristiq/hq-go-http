@@ -1,8 +1,8 @@
 # hq-go-http
 
-![made with go](https://img.shields.io/badge/made%20with-Go-0000FF.svg) [![license](https://img.shields.io/badge/license-MIT-gray.svg?color=0000FF)](https://github.com/hueristiq/hq-go-http/blob/master/LICENSE) ![maintenance](https://img.shields.io/badge/maintained%3F-yes-0000FF.svg) [![open issues](https://img.shields.io/github/issues-raw/hueristiq/hq-go-http.svg?style=flat&color=0000FF)](https://github.com/hueristiq/hq-go-http/issues?q=is:issue+is:open) [![closed issues](https://img.shields.io/github/issues-closed-raw/hueristiq/hq-go-http.svg?style=flat&color=0000FF)](https://github.com/hueristiq/hq-go-http/issues?q=is:issue+is:closed) [![contribution](https://img.shields.io/badge/contributions-welcome-0000FF.svg)](https://github.com/hueristiq/hq-go-http/blob/master/CONTRIBUTING.md)
+![made with go](https://img.shields.io/badge/made%20with-Go-1E90FF.svg) [![go report card](https://goreportcard.com/badge/github.com/hueristiq/xsubfind3r)](https://goreportcard.com/report/github.com/hueristiq/hq-go-http) [![license](https://img.shields.io/badge/license-MIT-gray.svg?color=1E90FF)](https://github.com/hueristiq/hq-go-http/blob/master/LICENSE) ![maintenance](https://img.shields.io/badge/maintained%3F-yes-1E90FF.svg) [![open issues](https://img.shields.io/github/issues-raw/hueristiq/hq-go-http.svg?style=flat&color=1E90FF)](https://github.com/hueristiq/hq-go-http/issues?q=is:issue+is:open) [![closed issues](https://img.shields.io/github/issues-closed-raw/hueristiq/hq-go-http.svg?style=flat&color=1E90FF)](https://github.com/hueristiq/hq-go-http/issues?q=is:issue+is:closed) [![contribution](https://img.shields.io/badge/contributions-welcome-1E90FF.svg)](https://github.com/hueristiq/hq-go-http/blob/master/CONTRIBUTING.md)
 
-`hq-go-http` is a [Go (Golang)](http://golang.org/) HTTP client package, designed for robust web communication. It is built with retry policies, digest authentication support, and automatic fallback to HTTP/2, offering a highly resilient solution for making HTTP requests.
+`hq-go-http` is a [Go (Golang)](http://golang.org/) HTTP client package for robust web communication. It is built with retry policies, digest authentication support, and automatic fallback to HTTP/2, offering a highly resilient solution for making HTTP requests.
 
 ## Resource
 
@@ -13,7 +13,7 @@
 * [Licensing](#licensing)
 * [Credits](#credits)
 	* [Contributors](#contributors)
-	* [Similar Projects](#similar-projects)
+	* [Alternatives](#`)
 
 ## Features
 
@@ -80,7 +80,7 @@ A huge thanks to all the contributors who have helped make `hq-go-http` what it 
 
 [![contributors](https://contrib.rocks/image?repo=hueristiq/hq-go-http&max=500)](https://github.com/hueristiq/hq-go-http/graphs/contributors)
 
-### Similar Projects
+### Alternatives
 
 If you're interested in more packages like this, check out:
 
