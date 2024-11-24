@@ -19,7 +19,6 @@ type Request struct {
 	*http.Request
 
 	Metrics Metrics // Tracks various metrics related to request handling
-	Auth    *Auth   // Holds authentication information for the request
 }
 
 // WithContext creates a new Request with the provided context. This allows you
@@ -72,20 +71,9 @@ func (r *Request) BodyBytes() (body []byte, err error) {
 // Returns:
 //   - req: A new Request with the same data but reset Metrics and context.
 func (r *Request) Clone(ctx context.Context) (req *Request) {
-	var auth *Auth
-
-	if r.Auth != nil {
-		auth = &Auth{
-			Type:     r.Auth.Type,
-			Username: r.Auth.Username,
-			Password: r.Auth.Password,
-		}
-	}
-
 	req = &Request{
 		Request: r.Request.Clone(ctx),
 		Metrics: Metrics{},
-		Auth:    auth,
 	}
 
 	return
@@ -134,21 +122,6 @@ type Metrics struct {
 	Retries     int // Retries is the number of retries for the request
 	DrainErrors int // DrainErrors is number of errors occurred in draining response body
 }
-
-// Auth holds authentication credentials for a request.
-type Auth struct {
-	Type     AuthType // The type of authentication (e.g., DigestAuth).
-	Username string   // The username for authentication.
-	Password string   // The username for authentication.
-}
-
-// AuthType defines different types of authentication.
-type AuthType uint8
-
-const (
-	// Digest Authentication method.
-	DigestAuth AuthType = iota
-)
 
 // NewRequest creates a new Request without context using the specified HTTP method, URL, and body.
 //
@@ -212,7 +185,7 @@ func NewRequestFromURL(url, method string, body interface{}) (req *Request, err 
 //   - req: A new Request object with the provided context.
 //   - err: An error if request creation fails.
 func NewRequestFromURLWithContext(ctx context.Context, url, method string, body interface{}) (req *Request, err error) {
-	bodyReader, contentLength, err := getReusableBodyandContentLength(body)
+	reqBodyReader, reqContentLength, err := getReusableBodyandContentLength(body)
 	if err != nil {
 		return
 	}
@@ -229,15 +202,14 @@ func NewRequestFromURLWithContext(ctx context.Context, url, method string, body 
 
 	// content-length and body should be assigned only
 	// if request has body
-	if bodyReader != nil {
-		httpReq.ContentLength = contentLength
-		httpReq.Body = bodyReader
+	if reqBodyReader != nil {
+		httpReq.ContentLength = reqContentLength
+		httpReq.Body = reqBodyReader
 	}
 
 	req = &Request{
 		Request: httpReq,
 		Metrics: Metrics{},
-		Auth:    nil,
 	}
 
 	return

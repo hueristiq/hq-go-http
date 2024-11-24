@@ -3,15 +3,12 @@ package http
 import (
 	"net"
 	"net/http"
-	"net/url"
 	"runtime"
 	"time"
 )
 
-var DefaultClient *Client
-
 var DefaultSingleClientConfiguration = &ClientConfiguration{
-	RetryMax:        5,
+	Retries:         5,
 	RetryWaitMin:    1 * time.Second,
 	RetryWaitMax:    30 * time.Second,
 	Timeout:         30 * time.Second,
@@ -21,7 +18,7 @@ var DefaultSingleClientConfiguration = &ClientConfiguration{
 }
 
 var DefaultSprayingClientConfiguration = &ClientConfiguration{
-	RetryMax:        5,
+	Retries:         5,
 	RetryWaitMin:    1 * time.Second,
 	RetryWaitMax:    30 * time.Second,
 	Timeout:         30 * time.Second,
@@ -29,6 +26,8 @@ var DefaultSprayingClientConfiguration = &ClientConfiguration{
 	KillIdleConn:    true,
 	NoAdjustTimeout: true,
 }
+
+var DefaultClient *Client
 
 func init() {
 	DefaultClient, _ = NewClient(DefaultSingleClientConfiguration)
@@ -102,18 +101,30 @@ func DefaultPooledClient() (client *http.Client) {
 	return
 }
 
-func Get(URL string) (res *http.Response, err error) {
-	return DefaultClient.Get(URL)
+func GET(URL string) *RequestBuilder {
+	return DefaultClient.GET(URL)
 }
 
-func Head(URL string) (res *http.Response, err error) {
-	return DefaultClient.Head(URL)
+// func Get(URL string) (res *http.Response, err error) {
+// 	return DefaultClient.Get(URL)
+// }
+
+func HEAD(URL string) *RequestBuilder {
+	return DefaultClient.HEAD(URL)
 }
 
-func Post(URL, bodyType string, body interface{}) (res *http.Response, err error) {
-	return DefaultClient.Post(URL, bodyType, body)
+// func Head(URL string) (res *http.Response, err error) {
+// 	return DefaultClient.Head(URL)
+// }
+
+func POST(URL string) *RequestBuilder {
+	return DefaultClient.HEAD(URL)
 }
 
-func PostForm(URL string, data url.Values) (res *http.Response, err error) {
-	return DefaultClient.PostForm(URL, data)
-}
+// func Post(URL, bodyType string, body interface{}) (res *http.Response, err error) {
+// 	return DefaultClient.Post(URL, bodyType, body)
+// }
+
+// func PostForm(URL string, data url.Values) (res *http.Response, err error) {
+// 	return DefaultClient.PostForm(URL, data)
+// }

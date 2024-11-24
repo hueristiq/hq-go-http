@@ -1,9 +1,9 @@
-github.com/Mzack9999/go-http-digest-auth-client v0.6.0 h1:LXVNMsj7qiNVmlZByFbjJmXf6SOm/uoo04XmnNcWPms=
-github.com/Mzack9999/go-http-digest-auth-client v0.6.0/go.mod h1:gbwaYYXwA15ZfIxMyY5QU1acATDyNKEuG5TylBCL7AM=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/hueristiq/hq-go-retrier v0.0.0-20241122195731-385c7d253525 h1:DXsl0OsSlVOHpcZg1zmiH38OPCnM282ryOrt4QJkojI=
 github.com/hueristiq/hq-go-retrier v0.0.0-20241122195731-385c7d253525/go.mod h1:YkxIHoJHsL0wmzQ3tc0qz4UTr9q9eCicUt5RvMV//xw=
+github.com/hueristiq/hq-go-retrier v0.0.0-20241124123316-75e4987d3cb6 h1:MrT8DTES74Y5l79N6PPPg3q/GbHQWQcats76FBs6Er0=
+github.com/hueristiq/hq-go-retrier v0.0.0-20241124123316-75e4987d3cb6/go.mod h1:1SITeMGkM7cJh41P9zMoXqbp5h8fxlF9nuPdynkwjjI=
 github.com/hueristiq/hqgoutils v0.0.0-20231024005153-bd2c47932440 h1:dpHAa9c74HgAXkZ2WPd84q2cCiF76eluuSGRw7bk7To=
 github.com/hueristiq/hqgoutils v0.0.0-20231024005153-bd2c47932440/go.mod h1:NlZ117o///yWDbRAbgYD7/Y44qce8z1Dj4caUsjunSY=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=

@@ -8,13 +8,13 @@ import (
 	"regexp"
 )
 
-// CheckRetry defines a function type that determines whether a request should be retried.
+// RetryPolicy defines a function type that determines whether a request should be retried.
 // It is called following each request with the response and error values returned by
-// the http.Client. If CheckRetry returns false, the Client stops retrying
-// and returns the response to the caller. If CheckRetry returns an error,
+// the http.Client. If RetryPolicy returns false, the Client stops retrying
+// and returns the response to the caller. If RetryPolicy returns an error,
 // that error value is returned in lieu of the error from the request. The
 // Client will close any response body when retrying, but if the retry is
-// aborted it is up to the CheckRetry callback to properly close any
+// aborted it is up to the RetryPolicy callback to properly close any
 // response body before returning.
 //
 // Parameters:
@@ -23,8 +23,8 @@ import (
 //
 // Returns:
 //   - retry: A boolean indicating whether the request should be retried.
-//   - perr: An error if there was an issue while checking for retry logic.
-type CheckRetry func(ctx context.Context, err error) (retry bool, perr error)
+//   - errr: An error if there was an issue while checking for retry logic.
+type RetryPolicy func(ctx context.Context, err error) (retry bool, errr error)
 
 var (
 	// redirectsErrorRegex is a regular expression to match the error returned by net/http when the
@@ -44,8 +44,8 @@ var (
 // Parameters: None.
 //
 // Returns:
-//   - A CheckRetry function that determines if the request should be retried.
-func DefaultRetryPolicy() func(ctx context.Context, err error) (retry bool, perr error) {
+//   - A RetryPolicy function that determines if the request should be retried.
+func DefaultRetryPolicy() func(ctx context.Context, err error) (retry bool, errr error) {
 	return IsErrorRecoverable
 }
 
@@ -55,8 +55,8 @@ func DefaultRetryPolicy() func(ctx context.Context, err error) (retry bool, perr
 // Parameters: None.
 //
 // Returns:
-//   - A CheckRetry function that determines if the request should be retried based on recoverable errors.
-func HostSprayRetryPolicy() func(ctx context.Context, err error) (retry bool, perr error) {
+//   - A RetryPolicy function that determines if the request should be retried based on recoverable errors.
+func HostSprayRetryPolicy() func(ctx context.Context, err error) (retry bool, errr error) {
 	return IsErrorRecoverable
 }
 
@@ -70,42 +70,47 @@ func HostSprayRetryPolicy() func(ctx context.Context, err error) (retry bool, pe
 //
 // Returns:
 //   - recoverable: A boolean indicating whether the error is recoverable and the request can be retried.
-//   - err: An error if the context encountered an issue (e.g., context.Canceled or context.DeadlineExceeded).
-func IsErrorRecoverable(ctx context.Context, target error) (recoverable bool, err error) {
+//   - errr: An error if the context encountered an issue (e.g., context.Canceled or context.DeadlineExceeded).
+func IsErrorRecoverable(ctx context.Context, err error) (recoverable bool, errr error) {
 	// Do not retry if the context has been canceled or the deadline has been exceeded
 	if ctx.Err() != nil {
-		err = ctx.Err()
+		errr = ctx.Err()
 
 		return
 	}
 
 	var URLError *url.Error
 
-	if target != nil && errors.As(target, &URLError) {
+	if err != nil && errors.As(err, &URLError) {
 		// Do not retry if the error was caused by exceeding the maximum number of redirects
-		if redirectsErrorRegex.MatchString(target.Error()) {
+		if redirectsErrorRegex.MatchString(err.Error()) {
+			errr = err
+
 			return
 		}
 
 		// Do not retry if the error was caused by an unsupported protocol scheme
-		if schemeErrorRegex.MatchString(target.Error()) {
+		if schemeErrorRegex.MatchString(err.Error()) {
+			errr = err
+
 			return
 		}
 
 		// Do not retry if the error was caused by a TLS certificate verification failure
 		var UnknownAuthorityError x509.UnknownAuthorityError
 
-		if errors.As(target, &UnknownAuthorityError) {
+		if errors.As(err, &UnknownAuthorityError) {
+			errr = err
+
 			return
 		}
 	}
 
-	if target != nil {
+	if err != nil {
 		recoverable = true
 
 		return
 	}
 
-	// If no error is present, return false as the request did not fail
 	return
 }

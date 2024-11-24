@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	dac "github.com/Mzack9999/go-http-digest-auth-client"
 	"github.com/hueristiq/hq-go-http/methods"
 	retrier "github.com/hueristiq/hq-go-retrier"
 	"github.com/hueristiq/hq-go-retrier/backoff"
@@ -20,17 +18,19 @@ import (
 // Client defines an HTTP client with retry policies, support for digest authentication, and optional HTTP/2 fallback.
 // It is configured with both HTTP/1.x and HTTP/2 clients, as well as error handling and retry logic.
 type Client struct {
-	HTTPClient  *http.Client // HTTP/1.x client used for standard requests.
-	HTTP2Client *http.Client // HTTP/2 client fallback if HTTP/1.x fails with specific errors.
+	HTTPClient  *http.Client
+	HTTP2Client *http.Client
 
-	OnError ErrorHandler // Custom error handler function, invoked after retries are exhausted.
+	OnError ErrorHandler
 
-	CheckRetry CheckRetry      // Function to check if the request should be retried based on response or error.
-	Backoff    backoff.Backoff // Strategy for delaying retries (e.g., exponential backoff).
+	RetryPolicy  RetryPolicy
+	RetryBackoff backoff.Backoff
 
-	requestCounter atomic.Uint32 // Counts the number of requests made, used to determine when to close idle connections.
+	BaseURL string
+	Headers map[string]string
 
-	cfg *ClientConfiguration // Configuration object containing client-specific settings like retry limits, timeouts, and backoff strategy.
+	requestCounter atomic.Uint32
+	cfg            *ClientConfiguration
 }
 
 // Do executes an HTTP request with the client, applying retry policies, error handling, and optional HTTP/2 fallback.
@@ -47,8 +47,7 @@ func (c *Client) Do(req *Request) (res *http.Response, err error) {
 
 	defer cancel()
 
-	// Determine the maximum number of retries from the configuration or request context.
-	retryMax := c.cfg.RetryMax
+	retryMax := c.cfg.Retries
 
 	if ctxRetryMax := req.Context().Value(RetryMax); ctxRetryMax != nil {
 		if maxRetriesParsed, ok := ctxRetryMax.(int); ok {
@@ -57,25 +56,16 @@ func (c *Client) Do(req *Request) (res *http.Response, err error) {
 	}
 
 	res, err = retrier.RetryWithData(ctx, func() (res *http.Response, err error) {
-		// Handle digest authentication if required by the request.
-		if req.Auth != nil && req.Auth.Type == DigestAuth {
-			digestTransport := dac.NewTransport(req.Auth.Username, req.Auth.Password)
-
-			digestTransport.HTTPClient = c.HTTPClient
-
-			res, err = digestTransport.RoundTrip(req.Request)
-		} else {
-			res, err = c.HTTPClient.Do(req.Request)
-		}
+		res, err = c.HTTPClient.Do(req.Request)
 
 		// Check if the request should be retried based on the response or error.
-		retry, checkErr := c.CheckRetry(req.Context(), err)
+		retry, checkErr := c.RetryPolicy(req.Context(), err)
 
 		// Fallback to HTTP/2 if HTTP/1.x transport encounters specific errors.
 		if err != nil && strings.Contains(err.Error(), "net/http: HTTP/1.x transport connection broken: malformed HTTP version \"HTTP/2\"") {
 			res, err = c.HTTP2Client.Do(req.Request)
 
-			retry, checkErr = c.CheckRetry(req.Context(), err)
+			retry, checkErr = c.RetryPolicy(req.Context(), err)
 		}
 
 		if err != nil {
@@ -108,7 +98,7 @@ func (c *Client) Do(req *Request) (res *http.Response, err error) {
 	if c.OnError != nil {
 		c.closeIdleConnections()
 
-		res, err = c.OnError(res, err, c.cfg.RetryMax+1)
+		res, err = c.OnError(res, err, c.cfg.Retries+1)
 
 		return
 	}
@@ -120,91 +110,109 @@ func (c *Client) Do(req *Request) (res *http.Response, err error) {
 
 		c.closeIdleConnections()
 
-		err = fmt.Errorf("%s %s giving up after %d attempts: %w", req.Method, req.URL, c.cfg.RetryMax+1, err)
+		err = fmt.Errorf("%s %s giving up after %d attempts: %w", req.Method, req.URL, c.cfg.Retries+1, err)
 	}
 
 	return
 }
 
-// Get sends an HTTP GET request to the specified URL.
-// It creates a new request and delegates the actual work to the Do method.
-//
-// Parameters:
-//   - URL: The URL to send the GET request to.
-//
-// Returns:
-//   - res: The HTTP response from the request, or nil if the request failed.
-//   - err: Error encountered during the request or after exhausting retries.
-func (c *Client) Get(URL string) (res *http.Response, err error) {
-	req, err := NewRequest(methods.Get, URL, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	res, err = c.Do(req)
+func (c *Client) GET(URL string) (builder *RequestBuilder) {
+	builder = NewRequestBuilder(c, methods.Get.String(), URL)
 
 	return
 }
 
-// Head sends an HTTP HEAD request to the specified URL.
-// Similar to the Get method, but retrieves only the headers.
-//
-// Parameters:
-//   - URL: The URL to send the HEAD request to.
-//
-// Returns:
-//   - res: The HTTP response from the request, or nil if the request failed.
-//   - err: Error encountered during the request or after exhausting retries.
-func (c *Client) Head(URL string) (res *http.Response, err error) {
-	req, err := NewRequest(methods.Head, URL, nil)
-	if err != nil {
-		return nil, err
-	}
+// // Get sends an HTTP GET request to the specified URL.
+// // It creates a new request and delegates the actual work to the Do method.
+// //
+// // Parameters:
+// //   - URL: The URL to send the GET request to.
+// //
+// // Returns:
+// //   - res: The HTTP response from the request, or nil if the request failed.
+// //   - err: Error encountered during the request or after exhausting retries.
+// func (c *Client) Get(URL string) (res *http.Response, err error) {
+// 	req, err := NewRequest(methods.Get.String(), URL, nil)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	res, err = c.Do(req)
+// 	res, err = c.Do(req)
 
-	return
-}
+// 	return
+// }
 
-// Post sends an HTTP POST request with a specified body to the provided URL.
-// It sets the appropriate Content-Type header and sends the request.
-//
-// Parameters:
-//   - URL: The URL to send the POST request to.
-//   - bodyType: The MIME type of the body content (e.g., "application/json").
-//   - body: The data to send in the POST request.
-//
-// Returns:
-//   - res: The HTTP response from the request, or nil if the request failed.
-//   - err: Error encountered during the request or after exhausting retries.
-func (c *Client) Post(URL, bodyType string, body interface{}) (res *http.Response, err error) {
-	req, err := NewRequest(methods.Post, URL, body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", bodyType)
-
-	res, err = c.Do(req)
+func (c *Client) HEAD(URL string) (builder *RequestBuilder) {
+	builder = NewRequestBuilder(c, methods.Head.String(), URL)
 
 	return
 }
 
-// PostForm sends an HTTP POST request with form data to the provided URL.
-// The form data is encoded in application/x-www-form-urlencoded format.
-//
-// Parameters:
-//   - URL: The URL to send the POST request to.
-//   - data: The form data to be encoded and sent in the request body.
-//
-// Returns:
-//   - res: The HTTP response from the request, or nil if the request failed.
-//   - err: Error encountered during the request or after exhausting retries.
-func (c *Client) PostForm(URL string, data url.Values) (res *http.Response, err error) {
-	res, err = c.Post(URL, "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+// // Head sends an HTTP HEAD request to the specified URL.
+// // Similar to the Get method, but retrieves only the headers.
+// //
+// // Parameters:
+// //   - URL: The URL to send the HEAD request to.
+// //
+// // Returns:
+// //   - res: The HTTP response from the request, or nil if the request failed.
+// //   - err: Error encountered during the request or after exhausting retries.
+// func (c *Client) Head(URL string) (res *http.Response, err error) {
+// 	req, err := NewRequest(methods.Head.String(), URL, nil)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	res, err = c.Do(req)
+
+// 	return
+// }
+
+func (c *Client) POST(URL string) (builder *RequestBuilder) {
+	builder = NewRequestBuilder(c, methods.Post.String(), URL)
 
 	return
 }
+
+// // Post sends an HTTP POST request with a specified body to the provided URL.
+// // It sets the appropriate Content-Type header and sends the request.
+// //
+// // Parameters:
+// //   - URL: The URL to send the POST request to.
+// //   - bodyType: The MIME type of the body content (e.g., "application/json").
+// //   - body: The data to send in the POST request.
+// //
+// // Returns:
+// //   - res: The HTTP response from the request, or nil if the request failed.
+// //   - err: Error encountered during the request or after exhausting retries.
+// func (c *Client) Post(URL, bodyType string, body interface{}) (res *http.Response, err error) {
+// 	req, err := NewRequest(methods.Post.String(), URL, body)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	req.Header.Set("Content-Type", bodyType)
+
+// 	res, err = c.Do(req)
+
+// 	return
+// }
+
+// // PostForm sends an HTTP POST request with form data to the provided URL.
+// // The form data is encoded in application/x-www-form-urlencoded format.
+// //
+// // Parameters:
+// //   - URL: The URL to send the POST request to.
+// //   - data: The form data to be encoded and sent in the request body.
+// //
+// // Returns:
+// //   - res: The HTTP response from the request, or nil if the request failed.
+// //   - err: Error encountered during the request or after exhausting retries.
+// func (c *Client) PostForm(URL string, data url.Values) (res *http.Response, err error) {
+// 	res, err = c.Post(URL, "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+
+// 	return
+// }
 
 // setKillIdleConnections checks the HTTP client's configuration to determine if idle connections should be killed.
 // This is done based on settings like DisableKeepAlives or MaxConnsPerHost.
@@ -256,16 +264,22 @@ func (c *Client) drainBody(req *Request, resp *http.Response) {
 // ClientConfiguration defines the configuration for an HTTP client.
 // This includes settings for retry logic, timeouts, backoff strategies, and connection handling.
 type ClientConfiguration struct {
-	HTTPClient      *http.Client    // Optional HTTP client for use by the main client.
-	CheckRetry      CheckRetry      // Function to determine retry logic for failed requests.
-	RetryMax        int             // Maximum number of retry attempts for requests.
-	RetryWaitMin    time.Duration   // Minimum wait time between retries.
-	RetryWaitMax    time.Duration   // Maximum wait time between retries.
-	Backoff         backoff.Backoff // Backoff strategy for retrying requests.
-	KillIdleConn    bool            // Whether to close idle connections after each request.
-	RespReadLimit   int64           // Limit for reading response bodies during draining.
-	Timeout         time.Duration   // Global timeout for the HTTP client.
-	NoAdjustTimeout bool            // Flag to prevent automatic adjustment of per-request timeouts.
+	HTTPClient *http.Client
+
+	RetryPolicy  RetryPolicy     // Function to determine retry logic for failed requests.
+	Retries      int             // Maximum number of retry attempts for requests.
+	RetryWaitMin time.Duration   // Minimum wait time between retries.
+	RetryWaitMax time.Duration   // Maximum wait time between retries.
+	RetryBackoff backoff.Backoff // Backoff strategy for retrying requests.
+
+	BaseURL string
+	Timeout time.Duration // Global timeout for the HTTP client.
+	Headers map[string]string
+
+	KillIdleConn  bool  // Whether to close idle connections after each request.
+	RespReadLimit int64 // Limit for reading response bodies during draining.
+
+	NoAdjustTimeout bool // Flag to prevent automatic adjustment of per-request timeouts.
 }
 
 // NewClient creates a new HTTP client based on the provided configuration.
@@ -301,32 +315,32 @@ func NewClient(cfg *ClientConfiguration) (client *Client, err error) {
 		return
 	}
 
-	client.CheckRetry = DefaultRetryPolicy()
+	client.RetryPolicy = DefaultRetryPolicy()
 
-	if cfg.CheckRetry != nil {
-		client.CheckRetry = cfg.CheckRetry
+	if cfg.RetryPolicy != nil {
+		client.RetryPolicy = cfg.RetryPolicy
 	}
 
-	client.Backoff = backoff.Exponential()
+	client.RetryBackoff = backoff.Exponential()
 
-	if cfg.Backoff != nil {
-		client.Backoff = cfg.Backoff
+	if cfg.RetryBackoff != nil {
+		client.RetryBackoff = cfg.RetryBackoff
 	}
 
-	// add timeout to clients
 	if cfg.Timeout > 0 {
 		client.HTTPClient.Timeout = cfg.Timeout
 		client.HTTP2Client.Timeout = cfg.Timeout
 	}
 
-	// if necessary adjusts per-request timeout proportionally to general timeout (30%)
-	if cfg.Timeout > time.Second*15 && cfg.RetryMax > 1 && !cfg.NoAdjustTimeout {
+	if cfg.Timeout > time.Second*15 && cfg.Retries > 1 && !cfg.NoAdjustTimeout {
 		client.HTTPClient.Timeout = time.Duration(cfg.Timeout.Seconds()*0.3) * time.Second
 	}
 
 	client.cfg = cfg
 
 	client.setKillIdleConnections()
+
+	client.Headers = make(map[string]string)
 
 	return
 }
