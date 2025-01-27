@@ -1,11 +1,13 @@
-module github.com/hueristiq/hq-go-http
+module go.source.hueristiq.com/http
 
 go 1.23.3
 
 require (
-	github.com/hueristiq/hq-go-retrier v0.0.0-20241212101846-4c0fbd2c56da
 	github.com/hueristiq/hqgoutils v0.0.0-20231024005153-bd2c47932440
-	golang.org/x/net v0.32.0
+	go.source.hueristiq.com/retrier v0.0.0-20250127064203-724abd75d518
+	golang.org/x/net v0.34.0
 )
 
-require golang.org/x/text v0.21.0 // indirect
+require (
+	golang.org/x/text v0.21.0 // indirect
+)

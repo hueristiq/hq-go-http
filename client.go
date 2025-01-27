@@ -9,9 +9,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/hueristiq/hq-go-http/methods"
-	retrier "github.com/hueristiq/hq-go-retrier"
-	"github.com/hueristiq/hq-go-retrier/backoff"
+	"go.source.hueristiq.com/http/methods"
+	"go.source.hueristiq.com/retrier"
+	"go.source.hueristiq.com/retrier/backoff"
 	"golang.org/x/net/http2"
 )
 

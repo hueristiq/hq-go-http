@@ -28,7 +28,7 @@
 To install the package, run the following command in your terminal:
 
 ```bash
-go get -v -u github.com/hueristiq/hq-go-http
+go get -v -u go.source.hueristiq.com/http
 ```
 
 This command will download and install the `hq-go-http` package into your Go workspace, making it available for use in your projects.
@@ -43,11 +43,11 @@ package main
 import (
 	"log"
 
-	http "github.com/hueristiq/hq-go-http"
+	hqgohttp "go.source.hueristiq.com/http"
 )
 
 func main() {
-	client := http.NewClient(&http.ClientConfiguration{
+	client := hqgohttp.NewClient(&hqgohttp.ClientConfiguration{
 		RetryMax:     3,              // Max number of retries
 		Timeout:      10 * time.Second, // Request timeout
 		RetryWaitMin: 1 * time.Second, // Minimum wait between retries
