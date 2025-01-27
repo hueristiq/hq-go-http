@@ -1,9 +1,5 @@
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/hueristiq/hq-go-http v0.0.0-20241212102619-5a7787339855 h1:JhPF/5cyona+jLWLq7Svd01G613WXbUSSE/V0FqRkzo=
-github.com/hueristiq/hq-go-http v0.0.0-20241212102619-5a7787339855/go.mod h1:Ud4ZVDC/DP2CioaqrEEVl7U5oIye9b6brKGdJHFfcPo=
-github.com/hueristiq/hq-go-retrier v0.0.0-20241212101846-4c0fbd2c56da h1:9HW9SELNqQiGHyqZ7XeFoyKVRVMSoosxVNlBqc6AsRk=
-github.com/hueristiq/hq-go-retrier v0.0.0-20241212101846-4c0fbd2c56da/go.mod h1:0gJoaPQEgXzuXWxqGS8eMQarow9FFjRuL/zyeTZPyuw=
 github.com/hueristiq/hqgoutils v0.0.0-20231024005153-bd2c47932440 h1:dpHAa9c74HgAXkZ2WPd84q2cCiF76eluuSGRw7bk7To=
 github.com/hueristiq/hqgoutils v0.0.0-20231024005153-bd2c47932440/go.mod h1:NlZ117o///yWDbRAbgYD7/Y44qce8z1Dj4caUsjunSY=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
