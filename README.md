@@ -11,9 +11,6 @@
 * [Usage](#usage)
 * [Contributing](#contributing)
 * [Licensing](#licensing)
-* [Credits](#credits)
-	* [Contributors](#contributors)
-	* [Alternatives](#`)
 
 ## Features
 
@@ -66,22 +63,12 @@ func main() {
 
 ## Contributing
 
-We welcome contributions! Feel free to submit [Pull Requests](https://github.com/hueristiq/hq-go-http/pulls) or report [Issues](https://github.com/hueristiq/hq-go-http/issues). For more details, check out the [contribution guidelines](https://github.com/hueristiq/hq-go-http/blob/master/CONTRIBUTING.md).
+Feel free to submit [Pull Requests](https://github.com/hueristiq/hq-go-http/pulls) or report [Issues](https://github.com/hueristiq/hq-go-http/issues). For more details, check out the [contribution guidelines](https://github.com/hueristiq/hq-go-http/blob/master/CONTRIBUTING.md).
+
+Huge thanks to the [contributors](https://github.com/hueristiq/hq-go-http/graphs/contributors) thus far!
+
+![contributors](https://contrib.rocks/image?repo=hueristiq/hq-go-http&max=500)
 
 ## Licensing
 
 This package is licensed under the [MIT license](https://opensource.org/license/mit). You are free to use, modify, and distribute it, as long as you follow the terms of the license. You can find the full license text in the repository - [Full MIT license text](https://github.com/hueristiq/hq-go-http/blob/master/LICENSE).
-
-## Credits
-
-### Contributors
-
-A huge thanks to all the contributors who have helped make `hq-go-http` what it is today!
-
-[![contributors](https://contrib.rocks/image?repo=hueristiq/hq-go-http&max=500)](https://github.com/hueristiq/hq-go-http/graphs/contributors)
-
-### Alternatives
-
-If you're interested in more packages like this, check out:
-
-[Hashicorp's go-retryablehttp](https://github.com/hashicorp/go-retryablehttp) ◇ [Project Discovery's retryablehttp-go](https://github.com/projectdiscovery/retryablehttp-go) ◇ [Gojek's heimdall](https://github.com/gojek/heimdall) ◇ [Monaco's request](https://github.com/monaco-io/request) ◇ [Opus Domini's fast-shot](https://github.com/opus-domini/fast-shot)
