@@ -2,7 +2,7 @@
 
 ![made with go](https://img.shields.io/badge/made%20with-Go-1E90FF.svg) [![go report card](https://goreportcard.com/badge/github.com/hueristiq/xsubfind3r)](https://goreportcard.com/report/github.com/hueristiq/hq-go-http) [![license](https://img.shields.io/badge/license-MIT-gray.svg?color=1E90FF)](https://github.com/hueristiq/hq-go-http/blob/master/LICENSE) ![maintenance](https://img.shields.io/badge/maintained%3F-yes-1E90FF.svg) [![open issues](https://img.shields.io/github/issues-raw/hueristiq/hq-go-http.svg?style=flat&color=1E90FF)](https://github.com/hueristiq/hq-go-http/issues?q=is:issue+is:open) [![closed issues](https://img.shields.io/github/issues-closed-raw/hueristiq/hq-go-http.svg?style=flat&color=1E90FF)](https://github.com/hueristiq/hq-go-http/issues?q=is:issue+is:closed) [![contribution](https://img.shields.io/badge/contributions-welcome-1E90FF.svg)](https://github.com/hueristiq/hq-go-http/blob/master/CONTRIBUTING.md)
 
-`hq-go-http` is a [Go (Golang)](http://golang.org/) HTTP client package for robust web communication. It is built with retry policies, digest authentication support, and automatic fallback to HTTP/2, offering a highly resilient solution for making HTTP requests.
+`hq-go-http` is a [Go (Golang)](http://golang.org/) package for robust and flexible HTTP communication. It offers advanced features such as configurable retry policies, fallback to HTTP/2, custom hooks for request/response/error handling, and fluent request building with connection management.
 
 ## Resource
 
@@ -14,11 +14,15 @@
 
 ## Features
 
-* **Retry Logic:** Automatically retries failed requests based on customizable rules. You can define how many times to retry, how long to wait between retries, and how the wait time should increase.
-* **Digest Authentication:** Supports digest authentication, a security mechanism used in some web services, to ensure safe and secure communication.
-* **HTTP/2 Fallback:** If an HTTP/1.x request fails, the client can automatically retry the request over HTTP/2.
-* **Timeout and Error Handling:** Configurable timeouts to avoid hanging requests, and custom error handlers to gracefully manage failures.
-* **Idle Connection Management:** Efficient management of idle connections to reduce unnecessary resource consumption.
+- **Configurable Retry Logic:** Customize retry policies and backoff strategies to handle transient network errors gracefully.
+- **HTTP/1.x and HTTP/2 Support:** The client maintains both HTTP/1.x and HTTP/2 clients. If the HTTP/1.x client encounters a specific transport error, the library automatically falls back to HTTP/2.
+- **Custom Hook Functions:** Attach custom functions that are invoked:
+	- **Before** a request is sent (`OnRequest`)
+	- **After** a response is received (`OnResponse`)
+	- **When** all retry attempts are exhausted (`OnError`)
+- **Connection Management:** Automatically drain and close idle connections to prevent resource exhaustion in long-running applications.
+- **Fluent Request Building:** Use the provided `RequestBuilder` to construct and send HTTP requests in a clear and concise manner.
+- **Custom Client Configuration:** Easily configure timeouts, retry parameters, backoff strategies, and connection management options through `ClientConfiguration`.
 
 ## Installation
 
@@ -51,7 +55,7 @@ func main() {
 		RetryWaitMax: 5 * time.Second, // Maximum wait between retries
 	})
 
-	response, err := client.Get("https://example.com")
+	response, err := client.Request().Method("GET").URL("https://example.com").Send()
 	if err != nil {
 		log.Fatalf("Request failed: %v", err)
 	}

@@ -1,13 +1,60 @@
-// Package status provides constants for all standard HTTP status codes.
-// HTTP status codes are returned by a server in response to a client's request to indicate
-// whether the request was successfully processed, or if there were errors.
+// Package status provides a strongly typed representation of HTTP status codes as defined by the IANA registry.
 //
-// These codes are divided into categories based on their response type:
-//   - Informational responses (100–199): Indicates that the request was received and is being processed.
-//   - Successful responses (200–299): Indicates that the request was successfully received, understood, and accepted.
-//   - Redirection messages (300–399): Indicates that further action needs to be taken by the client to complete the request.
-//   - Client error responses (400–499): Indicates that there was an error with the request sent by the client.
-//   - Server error responses (500–599): Indicates that the server encountered an error while processing the request.
+// # Overview
 //
-// Each status code is associated with a specific RFC section that defines its usage.
+// The status package defines the Status type, an alias for int, to represent HTTP status codes in a structured
+// and type-safe manner. In addition to exposing the raw numerical value of a status code via the Int() method,
+// the package offers a String() method that returns a human-readable description for each code. Utility methods are
+// also provided to help categorize responses:
+//   - IsInformational() determines if a status code is in the 1xx range.
+//   - IsSuccess() determines if a status code is in the 2xx range.
+//   - IsRedirection() determines if a status code is in the 3xx range.
+//   - IsClientError() determines if a status code is in the 4xx range.
+//   - IsServerError() determines if a status code is in the 5xx range.
+//   - IsError() returns true if the status code represents either a client or server error.
+//
+// Reference:
+//
+//	https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
+//
+// # Usage Example
+//
+// The following example demonstrates how to use the status package:
+//
+//	package main
+//
+//	import (
+//	    "fmt"
+//	    "go.source.hueristiq.com/http/status"
+//	)
+//
+//	func main() {
+//	    // Create a status using one of the predefined constants.
+//	    s := status.OK
+//	    fmt.Println("Status code:", s.Int())    // Output: 200
+//	    fmt.Println("Status text:", s.String())   // Output: "OK"
+//
+//	    // Check the category of the status code.
+//	    if s.IsSuccess() {
+//	        fmt.Println("The request was successful.")
+//	    }
+//	}
+//
+// # Interface
+//
+// The package defines an Interface that standardizes the behavior of types representing HTTP status codes. The interface
+// includes the following methods:
+//   - Int() int
+//   - String() string
+//   - IsInformational() bool
+//   - IsSuccess() bool
+//   - IsRedirection() bool
+//   - IsClientError() bool
+//   - IsServerError() bool
+//   - IsError() bool
+//
+// # Conclusion
+//
+// By providing a type-safe, well-structured representation of HTTP status codes, the status package enhances code clarity,
+// maintainability, and correctness when handling HTTP responses in your applications.
 package status
