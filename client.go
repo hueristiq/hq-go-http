@@ -446,7 +446,7 @@ var (
 // It is intended for standard scenarios where connection pooling is acceptable.
 var DefaultSingleClientConfiguration = &ClientConfiguration{
 	Timeout:       30 * time.Second,
-	RetryMax:      5,
+	RetryMax:      3,
 	RetryWaitMin:  1 * time.Second,
 	RetryWaitMax:  30 * time.Second,
 	KillIdleConn:  false,
@@ -457,7 +457,7 @@ var DefaultSingleClientConfiguration = &ClientConfiguration{
 // where killing idle connections is desirable to reduce resource usage.
 var DefaultSprayingClientConfiguration = &ClientConfiguration{
 	Timeout:       30 * time.Second,
-	RetryMax:      5,
+	RetryMax:      3,
 	RetryWaitMin:  1 * time.Second,
 	RetryWaitMax:  30 * time.Second,
 	KillIdleConn:  true,
