@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"net/http"
+
+	"go.source.hueristiq.com/url/parser"
 )
 
 // Request is a wrapper around http.Request that enables the request body to be reusable.
@@ -99,10 +101,23 @@ func NewFromURL(method, URL string, body interface{}) (req *Request, err error) 
 //   - req (*Request): A pointer to the newly created Request wrapper containing an http.Request.
 //   - err (error): An error value if the request creation fails (for example, due to an unsupported body type).
 func NewFromURLWithContext(ctx context.Context, method, URL string, body interface{}) (req *Request, err error) {
-	internalHTTPRequest, err := http.NewRequestWithContext(ctx, method, URL, nil) //nolint:gocritic // To be refactored
+	parsedURL, err := parser.NewURLParser().Parse(URL)
 	if err != nil {
 		return
 	}
+
+	// we provide a url without path to http.NewRequest at start and then replace url instance directly
+	// because `http.NewRequest()` internally parses using `url.Parse()` this removes/overrides any
+	// patches done by parsed.URL in unsafe mode (ex: https://example.com/%invalid)
+	//
+	// Note: this does not have any impact on actual path when sending request
+	// `http.NewRequestxxx` internally only uses `u.Host` and all other data is stored in `url.URL` instance
+	internalHTTPRequest, err := http.NewRequestWithContext(ctx, method, parsedURL.Scheme+"://"+parsedURL.Host, nil) //nolint:gocritic // To be refactored
+	if err != nil {
+		return
+	}
+
+	internalHTTPRequest.URL = parsedURL.URL
 
 	reusableBodyReadCloser, err := getReusableBodyReadCloser(body)
 	if err != nil {
