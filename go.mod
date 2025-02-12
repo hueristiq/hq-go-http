@@ -4,7 +4,8 @@ go 1.23.3
 
 require (
 	github.com/stretchr/testify v1.10.0
-	go.source.hueristiq.com/retrier v0.0.0-20250211115025-9185c5476b26
+	go.source.hueristiq.com/retrier v0.0.0-20250211140259-af5f5f3556b7
+	go.source.hueristiq.com/url v0.0.0-20250210155042-fe75d4c63dad
 	golang.org/x/net v0.35.0
 )
 

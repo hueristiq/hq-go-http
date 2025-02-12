@@ -121,7 +121,7 @@ func (c *Client) Do(req *request.Request) (res *http.Response, err error) {
 	if c.onError != nil {
 		c.closeIdleConnections()
 
-		res, err = c.onError(res, err, c.cfg.RetryMax+1)
+		res, err = c.onError(res, err, c.cfg.RetryMax)
 
 		return
 	}
@@ -130,9 +130,9 @@ func (c *Client) Do(req *request.Request) (res *http.Response, err error) {
 		if res != nil {
 			res.Body.Close()
 
-			err = fmt.Errorf("%s %s giving up after %d attempts: response status %d: %w", req.Method, req.URL, c.cfg.RetryMax+1, res.StatusCode, err)
+			err = fmt.Errorf("%s %s giving up after %d attempts: response status %d: %w", req.Method, req.URL, c.cfg.RetryMax, res.StatusCode, err)
 		} else {
-			err = fmt.Errorf("%s %s giving up after %d attempts: %w", req.Method, req.URL, c.cfg.RetryMax+1, err)
+			err = fmt.Errorf("%s %s giving up after %d attempts: %w", req.Method, req.URL, c.cfg.RetryMax, err)
 		}
 
 		c.closeIdleConnections()
@@ -446,7 +446,7 @@ var (
 // It is intended for standard scenarios where connection pooling is acceptable.
 var DefaultSingleClientConfiguration = &ClientConfiguration{
 	Timeout:       30 * time.Second,
-	RetryMax:      5,
+	RetryMax:      3,
 	RetryWaitMin:  1 * time.Second,
 	RetryWaitMax:  30 * time.Second,
 	KillIdleConn:  false,
@@ -457,7 +457,7 @@ var DefaultSingleClientConfiguration = &ClientConfiguration{
 // where killing idle connections is desirable to reduce resource usage.
 var DefaultSprayingClientConfiguration = &ClientConfiguration{
 	Timeout:       30 * time.Second,
-	RetryMax:      5,
+	RetryMax:      3,
 	RetryWaitMin:  1 * time.Second,
 	RetryWaitMax:  30 * time.Second,
 	KillIdleConn:  true,
