@@ -22,7 +22,7 @@ type Request struct {
 // New creates a new Request using the specified HTTP method, URL, and body.
 // This function is a convenience wrapper that internally delegates to NewFromURL.
 //
-// Arguments:
+// Parameters:
 //   - method (string): The HTTP method to use (e.g., "GET", "POST").
 //   - URL (string): The target URL for the HTTP request.
 //   - body (interface{}): An optional parameter representing the request body. The body can be any
@@ -42,7 +42,7 @@ func New(method, URL string, body interface{}) (req *Request, err error) {
 // This function is similar to New but allows specifying a context.Context, which is useful for request
 // cancellation, deadlines, or timeouts.
 //
-// Arguments:
+// Parameters:
 //   - ctx (context.Context): The context to be associated with the HTTP request.
 //   - method (string): The HTTP method to use (e.g., "GET", "POST").
 //   - URL (string): The target URL for the HTTP request.
@@ -62,7 +62,7 @@ func NewWithContext(ctx context.Context, method, URL string, body interface{}) (
 // NewFromURL creates a new Request using the specified HTTP method, URL, and body,
 // employing a default background context. This is a convenience wrapper around NewFromURLWithContext.
 //
-// Arguments:
+// Parameters:
 //   - method (string): The HTTP method to use (e.g., "GET", "POST").
 //   - URL (string): The target URL for the HTTP request.
 //   - body (interface{}): An optional parameter representing the request body. The body can be any
@@ -89,7 +89,7 @@ func NewFromURL(method, URL string, body interface{}) (req *Request, err error) 
 //  3. If conversion is successful, set the request's Body to the reusable ReadCloser and update
 //     the ContentLength accordingly.
 //
-// Arguments:
+// Parameters:
 //   - ctx (context.Context): The context to associate with the HTTP request.
 //   - method (string): The HTTP method to use (e.g., "GET", "POST").
 //   - URL (string): The target URL for the HTTP request.
@@ -147,7 +147,7 @@ func NewFromURLWithContext(ctx context.Context, method, URL string, body interfa
 //     an io.Reader, which is then converted using NewReusableReadCloser.
 //   - Other types: For all other types, raw is passed to NewReusableReadCloser, which supports a variety of types.
 //
-// Arguments:
+// Parameters:
 //   - raw (interface{}): The raw input representing the request body. It may be nil or any type
 //     supported by NewReusableReadCloser.
 //

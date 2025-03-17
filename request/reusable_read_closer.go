@@ -40,7 +40,7 @@ type ReusableReadCloser struct {
 //   - *bytes.Reader, *strings.Reader, *io.SectionReader, io.ReadSeeker, io.Reader:
 //     Reads the entire content into a byte slice using io.ReadAll.
 //
-// Arguments:
+// Parameters:
 //   - raw (interface{}): The input data to be converted into a byte slice. The dynamic type of raw determines
 //     how the conversion is performed.
 //
@@ -113,7 +113,7 @@ func NewReusableReadCloser(raw interface{}) (reusableReadCloser *ReusableReadClo
 // Concurrency:
 //   - A mutex (mu) is used to ensure that concurrent invocations of Read are thread-safe.
 //
-// Arguments:
+// Parameters:
 //   - p ([]byte): The destination buffer into which data will be read.
 //
 // Returns:
