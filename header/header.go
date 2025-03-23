@@ -15,7 +15,9 @@ type Header string
 // Returns:
 //   - header (string): The HTTP header field as a string.
 func (h Header) String() (header string) {
-	return string(h)
+	header = string(h)
+
+	return
 }
 
 // Interface defines a common interface for types that represent HTTP header fields.
