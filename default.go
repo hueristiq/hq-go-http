@@ -90,10 +90,10 @@ func DefaultHTTPPooledTransport() (transport *http.Transport) {
 
 // DefaultHTTPTransport returns a new *http.Transport configured to disable idle connections
 // and keep-alives. It is derived from DefaultHTTPPooledTransport but modified to avoid
-// connection reuse, making it suitable for transient requests where connection pooling is not desired.
+// connection reuse, making it suitable for transient requests.
 //
 // Returns:
-//   - transport (*http.Transport): A pointer to a newly configured http.Transport.
+//   - transport (*http.Transport): A pointer to a newly configured http.Transport with idle connections disabled.
 func DefaultHTTPTransport() (transport *http.Transport) {
 	transport = DefaultHTTPPooledTransport()
 
@@ -108,7 +108,7 @@ func DefaultHTTPTransport() (transport *http.Transport) {
 // where connection reuse is not desired.
 //
 // Returns:
-//   - client (*http.Client): A pointer to a newly created http.Client.
+//   - client (*http.Client): A pointer to a newly created http.Client with a non-pooled transport.
 func DefaultHTTPClient() (client *http.Client) {
 	client = &http.Client{
 		Transport: DefaultHTTPTransport(),
@@ -121,7 +121,7 @@ func DefaultHTTPClient() (client *http.Client) {
 // It bases its decision on whether the encountered error is recoverable by delegating to isErrorRecoverable.
 //
 // Returns:
-//   - A RetryPolicy function.
+//   - A RetryPolicy function that accepts a context and error, and returns a boolean indicating retry and an error.
 func DefaultRetryPolicy() func(ctx context.Context, err error) (retry bool, errr error) {
 	return isErrorRecoverable
 }
@@ -130,7 +130,7 @@ func DefaultRetryPolicy() func(ctx context.Context, err error) (retry bool, errr
 // targeted concurrently (host spraying). Currently, it delegates to the same isErrorRecoverable function as the default.
 //
 // Returns:
-//   - A RetryPolicy function
+//   - A RetryPolicy function suitable for host spraying scenarios.
 func HostSprayRetryPolicy() func(ctx context.Context, err error) (retry bool, errr error) {
 	return isErrorRecoverable
 }
