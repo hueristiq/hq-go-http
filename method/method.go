@@ -1,104 +1,53 @@
 package method
 
-// Method represents HTTP methods as defined by IANA.
+// Method represents an HTTP method as defined by IANA.
 //
-// The Method type provides a strongly typed representation of HTTP methods, ensuring correctness
-// and maintainability when constructing and handling HTTP requests.
-//
-// Reference: https://www.iana.org/assignments/http-methods/http-methods.xhtml
+// The Method type is a string alias that encapsulates common HTTP methods such as GET, POST, PUT, etc.
+// This strong typing improves code clarity and type safety by ensuring only valid HTTP method names are used.
 type Method string
 
-// String returns the string representation of the Method type.
+// String returns the underlying string representation of the Method.
 //
-// It converts the Method (a string alias) to its underlying string value.
-// This is useful when you need to output the method in HTTP requests, logs, or debug messages.
+// This method converts the Method (a string alias) to its plain string value. This conversion is
+// particularly useful when the method needs to be included in HTTP requests, log messages, or debug output.
 //
 // Returns:
-//   - method (string): The HTTP method as a string value.
-//
-// Example:
-//
-//	m := GET
-//	fmt.Println(m.String()) // Output: "GET"
+//   - method (string): The HTTP method as a string.
 func (m Method) String() (method string) {
-	return string(m)
+	method = string(m)
+
+	return
 }
 
-// Interface defines a common interface for HTTP methods.
+// Interface defines the contract for any type representing an HTTP method.
 //
-// Any type that implements a String() method returning the HTTP method as a string is considered
-// to satisfy this interface. This is useful when you want to abstract the representation of HTTP methods
-// or allow different implementations that adhere to the same contract.
+// Any type that implements the String() method returning a string is considered to satisfy this interface.
+// This abstraction is useful when you need to work with various types that represent HTTP methods while
+// ensuring they can all be converted to a string for processing.
 type Interface interface {
 	String() (method string)
 }
 
-// Safe Methods
-// These methods are considered safe because they are intended solely for retrieval
-// of data and should not cause side effects on the server.
+// Predefined HTTP method constants.
+//
+// These constants represent the most common HTTP methods and are declared as type Method to ensure
+// type safety and to prevent common errors such as misspelling method names. Although some of these
+// methods (like POST, PUT, DELETE, and PATCH) may cause changes on the server, they are included
+// here to cover a full range of common HTTP operations.
 const (
-	// GET retrieves a resource representation.
-	// It should not have side effects on the server.
-	// For further details, see RFC 7231, section 4.3.1.
-	GET Method = "GET"
-
-	// HEAD is similar to GET but does not return a response body.
-	// It is used for obtaining meta-information without transferring the resource itself.
-	// For further details, see RFC 7231, section 4.3.2.
-	HEAD Method = "HEAD"
-)
-
-// Idempotent Methods
-// These methods can be invoked multiple times with the same outcome.
-// Using idempotent methods ensures that repeating the request does not lead to additional changes
-// beyond the first request.
-const (
-	// PUT updates or creates a resource at the target URL.
-	// It fully replaces the existing resource with the provided data.
-	// For further details, see RFC 7231, section 4.3.4.
-	PUT Method = "PUT"
-
-	// DELETE removes the specified resource.
-	// Repeated calls to DELETE should produce the same outcome as a single call.
-	// For further details, see RFC 7231, section 4.3.5.
-	DELETE Method = "DELETE"
-)
-
-// Unsafe Methods
-// These methods may modify resources on the server and are generally not idempotent.
-// They should be used with care since multiple identical requests might result in duplicate actions.
-const (
-	// POST submits data to the server, typically resulting in the creation of a new resource.
-	// This method is not idempotent and should be used when side effects are intended.
-	// For further details, see RFC 7231, section 4.3.3.
-	POST Method = "POST"
-
-	// PATCH applies partial modifications to a resource.
-	// Unlike PUT, it does not require the complete replacement of the resource.
-	// For further details, see RFC 5789.
-	PATCH Method = "PATCH"
-)
-
-// Auxiliary Methods
-// These methods serve special use cases that do not fall into the standard safe,
-// idempotent, or unsafe categories.
-const (
-	// OPTIONS returns the communication options available for a target resource.
-	// This method is often used to discover the capabilities or requirements of the server.
-	// For further details, see RFC 7231, section 4.3.7.
-	OPTIONS Method = "OPTIONS"
-
-	// TRACE performs a message loop-back test along the path to the target resource.
-	// It helps diagnose or debug intermediary behaviors (e.g., proxies altering the request).
-	// For further details, see RFC 7231, section 4.3.8.
-	TRACE Method = "TRACE"
-
-	// CONNECT establishes a tunnel to the server, usually to facilitate HTTPS communication over a proxy.
-	// It is used to create a direct connection for encrypted communication.
-	// For further details, see RFC 7231, section 4.3.6.
 	CONNECT Method = "CONNECT"
+	DELETE  Method = "DELETE"
+	GET     Method = "GET"
+	HEAD    Method = "HEAD"
+	OPTIONS Method = "OPTIONS"
+	PATCH   Method = "PATCH"
+	POST    Method = "POST"
+	PUT     Method = "PUT"
+	TRACE   Method = "TRACE"
 )
 
-// This compile-time assertion ensures that the Method type correctly implements the Interface interface.
-// If it does not, the assignment will cause a compile-time error.
+// Compile-time interface check to ensure Method implements Interface.
+//
+// This assignment forces a compile-time error if Method does not implement
+// the required String() method of the Interface, ensuring consistency.
 var _ Interface = (*Method)(nil)
