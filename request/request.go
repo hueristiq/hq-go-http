@@ -25,9 +25,9 @@ type Request struct {
 // Parameters:
 //   - method (string): The HTTP method to use (e.g., "GET", "POST").
 //   - URL (string): The target URL for the HTTP request.
-//   - body (interface{}): An optional parameter representing the request body. The body can be any
-//     type supported by getReusableBodyReadCloser, for example, a ReusableReadCloser,
-//     *ReusableReadCloser, or any type accepted by NewReusableReadCloser.
+//   - body (interface{}): An optional parameter representing the request body. The body can be any type
+//     supported by getReusableBodyReadCloser (e.g., a ReusableReadCloser, *ReusableReadCloser,
+//     or any type accepted by NewReusableReadCloser).
 //
 // Returns:
 //   - req (*Request): A pointer to the newly created Request wrapper containing an http.Request.
@@ -38,9 +38,9 @@ func New(method, URL string, body interface{}) (req *Request, err error) {
 	return
 }
 
-// NewWithContext creates a new Request using the provided context, HTTP method, URL, and body.
-// This function is similar to New but allows specifying a context.Context, which is useful for request
-// cancellation, deadlines, or timeouts.
+// NewWithContext creates a new Request with the specified context, HTTP method, URL, and body.
+// This function is similar to New but accepts a context.Context, which is useful for cancellation,
+// deadlines, or timeouts.
 //
 // Parameters:
 //   - ctx (context.Context): The context to be associated with the HTTP request.
@@ -59,8 +59,8 @@ func NewWithContext(ctx context.Context, method, URL string, body interface{}) (
 	return
 }
 
-// NewFromURL creates a new Request using the specified HTTP method, URL, and body,
-// employing a default background context. This is a convenience wrapper around NewFromURLWithContext.
+// NewFromURL creates a new Request using the specified HTTP method, URL, and body.
+// It uses a default background context and is a convenience wrapper around NewFromURLWithContext..
 //
 // Parameters:
 //   - method (string): The HTTP method to use (e.g., "GET", "POST").
@@ -79,15 +79,13 @@ func NewFromURL(method, URL string, body interface{}) (req *Request, err error) 
 }
 
 // NewFromURLWithContext creates a new Request using the provided context, HTTP method, URL, and body.
-// This function constructs an http.Request with the given context and then wraps it in a custom Request.
-// If a non-nil body is provided, it attempts to convert it into a reusable ReadCloser so that the body
-// can be read multiple times (for example, when retrying a request).
-//
-// The steps performed by this function are:
-//  1. Create an http.Request using http.NewRequestWithContext with a nil body.
-//  2. Convert the provided body into a *ReusableReadCloser via getReusableBodyReadCloser.
-//  3. If conversion is successful, set the request's Body to the reusable ReadCloser and update
-//     the ContentLength accordingly.
+// It performs the following steps:
+//  1. Parses the provided URL using a custom parser that applies a default scheme ("http") if needed.
+//  2. Constructs an http.Request with a temporary URL (containing only the scheme and host)
+//     to avoid overriding any patches applied by the custom parser.
+//  3. Replaces the temporary URL in the http.Request with the fully parsed URL.
+//  4. Converts the provided body into a reusable ReadCloser using getReusableBodyReadCloser,
+//     updating the ContentLength accordingly.
 //
 // Parameters:
 //   - ctx (context.Context): The context to associate with the HTTP request.
@@ -136,15 +134,14 @@ func NewFromURLWithContext(ctx context.Context, method, URL string, body interfa
 	return
 }
 
-// getReusableBodyReadCloser attempts to convert the provided raw input into a *ReusableReadCloser,
-// which is a type that implements io.ReadCloser and supports repeated reads of the underlying data.
-// This conversion supports multiple input types, enabling flexibility in specifying the request body.
+// getReusableBodyReadCloser attempts to convert the provided raw input into a reusable ReadCloser.
+// The conversion supports multiple input types, enabling flexibility in how the request body is specified.
 //
-// Supported types:
-//   - ReusableReadCloser: If raw is a value of type ReusableReadCloser, its address is taken.
+// Supported types include:
+//   - ReusableReadCloser: If raw is a value of this type, its address is taken.
 //   - *ReusableReadCloser: If raw is already a pointer, it is used directly.
 //   - func() (io.Reader, error): If raw is a function with this signature, the function is invoked to obtain
-//     an io.Reader, which is then converted using NewReusableReadCloser.
+//     an io.Reader, which is then converted via NewReusableReadCloser.
 //   - Other types: For all other types, raw is passed to NewReusableReadCloser, which supports a variety of types.
 //
 // Parameters:

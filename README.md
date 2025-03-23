@@ -7,7 +7,6 @@
 ## Resource
 
 * [Features](#features)
-* [Installation](#installation)
 * [Usage](#usage)
 * [Contributing](#contributing)
 * [Licensing](#licensing)
@@ -16,25 +15,14 @@
 
 - **Configurable Retry Logic:** Customize retry policies and backoff strategies to handle transient network errors gracefully.
 - **HTTP/1.x and HTTP/2 Support:** The client maintains both HTTP/1.x and HTTP/2 clients. If the HTTP/1.x client encounters a specific transport error, the library automatically falls back to HTTP/2.
-- **Custom Hook Functions:** Attach custom functions that are invoked:
-	- **Before** a request is sent (`OnRequest`)
-	- **After** a response is received (`OnResponse`)
-	- **When** all retry attempts are exhausted (`OnError`)
 - **Connection Management:** Automatically drain and close idle connections to prevent resource exhaustion in long-running applications.
-- **Fluent Request Building:** Use the provided `RequestBuilder` to construct and send HTTP requests in a clear and concise manner.
 - **Custom Client Configuration:** Easily configure timeouts, retry parameters, backoff strategies, and connection management options through `ClientConfiguration`.
 
-## Installation
-
-To install the package, run the following command in your terminal:
+## Usage
 
 ```bash
 go get -v -u go.source.hueristiq.com/http
 ```
-
-This command will download and install the `hq-go-http` package into your Go workspace, making it available for use in your projects.
-
-## Usage
 
 Here's a simple example demonstrating how to use `hq-go-http`:
 
@@ -55,7 +43,7 @@ func main() {
 		RetryWaitMax: 5 * time.Second, // Maximum wait between retries
 	})
 
-	response, err := client.Request().Method("GET").URL("https://example.com").Send()
+	response, err := client.Get("https://example.com")
 	if err != nil {
 		log.Fatalf("Request failed: %v", err)
 	}
