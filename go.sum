@@ -8,6 +8,8 @@ github.com/stretchr/testify v1.10.0 h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOf
 github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 go.source.hueristiq.com/retrier v0.0.0-20250316193858-2f86f37ebea9 h1:M4ylAvE+ZGiGCQFJegCUncFkcZ3C0ZtHXi8W/xqOYY0=
 go.source.hueristiq.com/retrier v0.0.0-20250316193858-2f86f37ebea9/go.mod h1:ohGUnbF/yXWsCKrOb4J6JrSJGukUTBgLBDIir1oNBA4=
+go.source.hueristiq.com/retrier v0.0.0-20250323223213-5d3c90d142d2 h1:3u4FjdVTeUX1ePjdMfd/SJMAJr/biLfP2+VzZCGa//4=
+go.source.hueristiq.com/retrier v0.0.0-20250323223213-5d3c90d142d2/go.mod h1:ohGUnbF/yXWsCKrOb4J6JrSJGukUTBgLBDIir1oNBA4=
 go.source.hueristiq.com/url v0.0.0-20250323223558-b0f5a8472348 h1:ouwT/5AoDFq1ZsGwvRcsOUfDtmwJyJQKV7Ck1xuT+c4=
 go.source.hueristiq.com/url v0.0.0-20250323223558-b0f5a8472348/go.mod h1:AHuHYgNJAvUCk70o7Fm3GFlXZGGTrAL4L7APZZiKyHk=
 golang.org/x/net v0.37.0 h1:1zLorHbz+LYj7MQlSf1+2tPIIgibq2eL5xkrGk6f+2c=
