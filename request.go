@@ -8,8 +8,10 @@ import (
 
 // RequestConfiguration holds settings specific to an individual HTTP request.
 // These settings override the global ClientConfiguration on a per-request basis.
-// They include the HTTP method, URL (and optionally BaseURL), query parameters, headers,
-// body content, timeout, and retry-related options.
+// The fields in this structure allow you to customize various aspects of an HTTP request,
+// such as the method, URL, query parameters, headers, body, and retry behavior.
+// This configuration is merged with the global settings to build the final request
+// before execution.
 //
 // Fields:
 //   - Method (string): The HTTP method for the request (e.g., GET, POST, PUT, etc.).

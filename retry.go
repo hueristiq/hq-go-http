@@ -9,17 +9,17 @@ import (
 )
 
 // RetryPolicy defines a function type that determines if an HTTP request should be retried.
-// It is invoked after each request attempt with the request's context and any encountered error.
-// If the function returns false, no further retries are attempted. Additionally, a non-nil error
-// return value overrides the original error, terminating further retry attempts.
+// It is invoked after each request attempt, passing the request's context and any encountered error.
+// The function returns a boolean indicating whether the request should be retried,
+// and a secondary error value that, if non-nil, overrides the original error and terminates further retry attempts.
 //
 // Parameters:
-//   - ctx (context.Context): The context for the request, containing cancellation signals and deadlines.
+//   - ctx (context.Context): The request's context, carrying cancellation signals and deadlines.
 //   - err (error): The error encountered during the HTTP request, or nil if the request succeeded.
 //
 // Returns:
-//   - retry (bool): True if the request should be retried; false if it should not.
-//   - errr (error): An error to override the original error, typically when a non-retryable error is encountered.
+//   - retry (bool): True if the request should be retried; false otherwise.
+//   - errr (error): An error to override the original error, typically when a non-retryable condition is met.
 type RetryPolicy func(ctx context.Context, err error) (retry bool, errr error)
 
 var (
@@ -33,17 +33,25 @@ var (
 )
 
 // isErrorRecoverable determines whether an error encountered during an HTTP request is recoverable,
-// meaning that the request may be retried. It examines the request context and the error details,
-// filtering out errors such as context cancellations, excessive redirects, unsupported protocol schemes,
-// or TLS certificate verification failures.
+// meaning that the request may be retried. It examines both the request context and the error details,
+// filtering out conditions such as context cancellation, excessive redirects, unsupported protocol schemes,
+// or TLS certificate verification failures (e.g., unknown authority).
+//
+// The function first checks the context for cancellation or deadline expiration. If the context
+// has an error, it immediately returns that error, as the request should not be retried.
+// It then inspects the error, particularly if it is of type *url.Error, and checks for specific error
+// conditions using regular expressions and type assertions. If any non-retryable condition is detected,
+// the error is returned and further retries are prevented.
 //
 // Parameters:
-//   - ctx (context.Context): The request's context, which may contain cancellation signals or deadlines.
+//   - ctx (context.Context): The request's context containing cancellation signals or deadlines.
 //   - err (error): The error encountered during the HTTP request.
 //
 // Returns:
-//   - recoverable (bool): True if the error is considered recoverable (the request may be retried); otherwise, false.
-//   - errr (error): An error value to override the original error in case the context is cancelled or a non-retryable error is detected.
+//   - recoverable (bool): True if the error is considered recoverable and the request may be retried;
+//     false if the error is non-retryable.
+//   - errr (error): An error to override the original error when a non-retryable condition is detected,
+//     such as a cancelled context or a specific transport error.
 func isErrorRecoverable(ctx context.Context, err error) (recoverable bool, errr error) {
 	if ctx.Err() != nil {
 		errr = ctx.Err()

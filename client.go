@@ -156,8 +156,8 @@ func (c *Client) Request(configurations ...*RequestConfiguration) (res *http.Res
 
 // getRequestConfiguration merges one or more RequestConfiguration objects with the client's default configuration.
 // It applies overrides for HTTP method, base URL, URL path, query parameters, headers, body, timeout,
-// and retry settings. If a BaseURL is provided, it is combined with the relative URL.
-// Additionally, query parameters are appended to the URL's query string.
+// and retry settings. If a BaseURL is provided, it is combined with the relative URL. Additionally,
+// query parameters are appended to the URL's query string.
 //
 // Parameters:
 //   - configurations (...*RequestConfiguration): Variadic list of pointers to RequestConfiguration instances.
