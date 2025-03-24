@@ -9,44 +9,101 @@ import (
 	"sync"
 )
 
-// ReusableReadCloser implements the io.ReadCloser interface, but with a twist.
-// Instead of permanently ending with an EOF when all data is read, it automatically
-// resets to the beginning. This makes it possible to repeatedly read the same data,
-// which is useful in scenarios like re-sending HTTP request bodies.
-//
-// It wraps an in-memory byte slice and a bytes.Reader to allow repeatedly reading
-// the same data. When the end of the data is reached, the internal reader resets
-// to the beginning so that the data can be read again.
+// ReusableReadCloser implements the io.ReadCloser interface by wrapping an in‑memory
+// byte slice and a bytes.Reader. It allows repeated reads of the same data by automatically
+// resetting the reader's position to the beginning when the end of the data is reached.
 //
 // Fields:
-//   - mu: A mutex to ensure thread-safe operations on the internal state.
-//   - data: A byte slice that holds the complete data to be read.
-//   - reader: A bytes.Reader that provides the actual reading functionality from the byte slice.
+//   - mu (sync.Mutex): A mutex to ensure thread-safe operations on the internal state.
+//   - data ([]byte): The complete byte slice containing the data to be read.
+//   - reader (*bytes.Reader): A bytes.Reader that facilitates reading from the data.
 type ReusableReadCloser struct {
 	mu     sync.Mutex
 	data   []byte
 	reader *bytes.Reader
 }
 
-// NewReusableReadCloser creates and returns a new instance of ReusableReadCloser from various types of input data.
-// It converts the provided input into an in‑memory byte slice and sets up an internal bytes.Reader to support repeated reads.
+// Read reads up to len(p) bytes from the internal data into the provided buffer p.
+// It implements the io.Reader interface. When the end of the data is reached (EOF),
+// the reader automatically resets to the beginning, allowing the data to be read repeatedly.
 //
-// Supported input types (via type assertion):
-//   - nil: Produces an empty byte slice.
+// Behavior:
+//  1. If the internal data is empty, Read returns 0 and no error.
+//  2. Data is read from the bytes.Reader into p.
+//  3. When an EOF is encountered:
+//     - If some data has been read (n > 0), the reader resets and the EOF error is suppressed.
+//     - If no data was read (n == 0), the reader resets and the read is retried.
+//
+// Concurrency:
+//   - The method employs a mutex (mu) to guarantee that concurrent calls to Read are thread-safe.
+//
+// Parameters:
+//   - p ([]byte): The buffer into which data is to be read.
+//
+// Returns:
+//   - n (int): The number of bytes successfully read into the buffer p.
+//   - err (error): An error encountered during reading (other than EOF, which is handled internally).
+func (r *ReusableReadCloser) Read(p []byte) (n int, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if len(r.data) == 0 {
+		return
+	}
+
+	n, err = r.reader.Read(p)
+	if err == io.EOF {
+		if n > 0 {
+			r.reset()
+
+			err = nil
+		} else {
+			r.reset()
+
+			n, err = r.reader.Read(p)
+		}
+	}
+
+	return
+}
+
+// reset repositions the internal bytes.Reader to the beginning of the data.
+// This helper function is invoked when EOF is encountered to allow the data
+// to be read again from the start. Any errors from Seek are ignored because
+// the operation is guaranteed to succeed with an in‑memory data source.
+func (r *ReusableReadCloser) reset() {
+	_, _ = r.reader.Seek(0, io.SeekStart)
+}
+
+// Close implements the io.Closer interface. Since ReusableReadCloser operates solely
+// on in-memory data and does not manage external resources, Close is a no-op that always returns nil.
+//
+// Returns:
+//   - err (error): Always nil.
+func (r *ReusableReadCloser) Close() (err error) {
+	return
+}
+
+// NewReusableReadCloser creates a new instance of ReusableReadCloser from a variety of input data types.
+// The function converts the provided input into an in‑memory byte slice and initializes a bytes.Reader,
+// enabling repeated reads of the same data.
+//
+// Supported input types via type assertion include:
+//   - nil: Results in an empty byte slice.
 //   - []byte: Uses the provided byte slice directly.
 //   - *[]byte: Dereferences the pointer to obtain the byte slice.
 //   - string: Converts the string into a byte slice.
-//   - *bytes.Buffer: Uses the underlying bytes from the buffer.
+//   - *bytes.Buffer: Retrieves the underlying bytes from the buffer.
 //   - *bytes.Reader, *strings.Reader, *io.SectionReader, io.ReadSeeker, io.Reader:
 //     Reads the entire content into a byte slice using io.ReadAll.
 //
-// Arguments:
-//   - raw (interface{}): The input data to be converted into a byte slice. The dynamic type of raw determines
-//     how the conversion is performed.
+// Parameters:
+//   - raw (interface{}): The input data to be converted to a byte slice. The function handles
+//     the conversion based on the dynamic type of the input.
 //
 // Returns:
-//   - reusableReadCloser (*ReusableReadCloser): A pointer to the newly created ReusableReadCloser instance that wraps the data.
-//   - err (error): An error value if the input type is unsupported or if an error occurs while reading data.
+//   - reusableReadCloser (*ReusableReadCloser): A pointer to the newly created ReusableReadCloser instance.
+//   - err (error): An error if the input type is unsupported or if an error occurs during data reading.
 func NewReusableReadCloser(raw interface{}) (reusableReadCloser *ReusableReadCloser, err error) {
 	var data []byte
 
@@ -99,69 +156,6 @@ func NewReusableReadCloser(raw interface{}) (reusableReadCloser *ReusableReadClo
 	return
 }
 
-// Read reads up to len(p) bytes from the internal data into the provided buffer p.
-// It implements the io.Reader interface. If the reader reaches the end of the data (EOF),
-// it automatically resets to the beginning so that subsequent read operations continue from the start.
-//
-// Behavior:
-//  1. If the internal data is empty, the method returns zero bytes read and no error.
-//  2. It reads data from the internal bytes.Reader into p.
-//  3. When an EOF is encountered:
-//     - If some data was read before the EOF (n > 0), it resets the reader and suppresses the EOF error.
-//     - If no data was read (n == 0), it resets the reader and retries the read operation.
-//
-// Concurrency:
-//   - A mutex (mu) is used to ensure that concurrent invocations of Read are thread-safe.
-//
-// Arguments:
-//   - p ([]byte): The destination buffer into which data will be read.
-//
-// Returns:
-//   - n (int): The number of bytes read into the buffer p.
-//   - err (error): An error value if an error (other than EOF, which is handled) occurs during reading.
-func (r *ReusableReadCloser) Read(p []byte) (n int, err error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if len(r.data) == 0 {
-		return
-	}
-
-	n, err = r.reader.Read(p)
-	if err == io.EOF {
-		if n > 0 {
-			r.reset()
-
-			err = nil
-		} else {
-			r.reset()
-
-			n, err = r.reader.Read(p)
-		}
-	}
-
-	return
-}
-
-// reset repositions the internal bytes.Reader back to the beginning of the data.
-// This helper function is called when EOF is encountered to allow repeated reading.
-// It uses the Seek method on the bytes.Reader to set the read offset to 0.
-// Any errors from Seek are ignored since the operation is guaranteed to succeed
-// with an in‑memory data source.
-func (r *ReusableReadCloser) reset() {
-	_, _ = r.reader.Seek(0, io.SeekStart)
-}
-
-// Close implements the io.Closer interface.
-// Since ReusableReadCloser only uses in-memory data and does not manage external resources,
-// Close is effectively a no-op and always returns nil.
-//
-// Returns:
-//   - err (error): Always nil.
-func (r *ReusableReadCloser) Close() (err error) {
-	return
-}
-
-// errUnsupportedType is a package-level error value used to indicate that the provided
-// input type to NewReusableReadCloser is not supported.
+// errUnsupportedType is a package-level error indicating that the provided input type
+// to NewReusableReadCloser is not supported.
 var errUnsupportedType = errors.New("unsupported type")

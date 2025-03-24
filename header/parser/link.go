@@ -48,7 +48,7 @@ func (l Link) String() (link string) {
 
 // HasParameter checks whether the Link contains a parameter with the specified key.
 //
-// Arguments:
+// Parameters:
 //   - key (string): The parameter name to check for (string).
 //
 // Returns:
@@ -62,7 +62,7 @@ func (l Link) HasParameter(key string) (hasParameter bool) {
 // Parameter retrieves the value of the parameter identified by the provided key.
 // If the parameter does not exist, an empty string is returned.
 //
-// Arguments:
+// Parameters:
 //   - key (string): The parameter name to retrieve (string).
 //
 // Returns:
@@ -103,7 +103,7 @@ func (l Links) String() (links string) {
 // that have a "rel" attribute matching the provided rel argument.
 // The comparison is case-sensitive.
 //
-// Arguments:
+// Parameters:
 //   - rel (string): The relation type to filter by (string). The comparison is case-sensitive.
 //
 // Returns:
@@ -127,7 +127,7 @@ var errEmptyParameter = errors.New("empty parameter")
 // Each entry should have the format: <URL>; param1="value1"; param2="value2", etc.
 // If the input string is empty, an empty Links slice is returned.
 //
-// Arguments:
+// Parameters:
 //   - raw (string): The raw HTTP Link header string to be parsed (string).
 //
 // Returns:
@@ -192,7 +192,7 @@ func ParseLinkHeader(raw string) (links Links) {
 // combined collection of Links parsed from all headers.
 // This is useful when the link information is spread across several header lines.
 //
-// Arguments:
+// Parameters:
 //   - headers ([]string): A slice of raw HTTP Link header strings (each string may contain multiple links).
 //
 // Returns:
@@ -212,7 +212,7 @@ func ParseLinkHeaders(headers []string) (links Links) {
 // If the value is enclosed in double quotes, they are removed.
 // If the raw string is empty or improperly formatted, an error is returned.
 //
-// Arguments:
+// Parameters:
 //   - raw (raw): The raw parameter string to be parsed (e.g., 'rel="next"') (string).
 //
 // Returns:
