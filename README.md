@@ -14,10 +14,9 @@
 
 ## Features
 
-- **Configurable Retry Logic:** Customize retry policies and backoff strategies to handle transient network errors gracefully.
-- **HTTP/1.x and HTTP/2 Support:** The client maintains both HTTP/1.x and HTTP/2 clients. If the HTTP/1.x client encounters a specific transport error, the library automatically falls back to HTTP/2.
-- **Connection Management:** Automatically drain and close idle connections to prevent resource exhaustion in long-running applications.
-- **Custom Client Configuration:** Easily configure timeouts, retry parameters, backoff strategies, and connection management options through `ClientConfiguration`.
+- **Configurable Retry Logic:** Customize retry policies and backoff to handle transient network errors gracefully.
+- **HTTP/1.x and HTTP/2 Support:** The client maintains both HTTP/1.x and HTTP/2 clients. If the HTTP/1.x client encounters a specific transport error, the package automatically falls back to HTTP/2.
+- **Connection Management:** Automatically drain and close idle connections to prevent resource exhaustion.
 
 ## Installation
 
