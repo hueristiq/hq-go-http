@@ -170,8 +170,8 @@ func (c *Client) getRequestConfiguration(configurations ...*RequestConfiguration
 		Method:        c.cfg.Method,
 		BaseURL:       c.cfg.BaseURL,
 		URL:           c.cfg.URL,
-		Params:        c.cfg.Params,
-		Headers:       c.cfg.Headers,
+		Params:        make(map[string]string),
+		Headers:       make(map[string]string),
 		Body:          c.cfg.Body,
 		RespReadLimit: c.cfg.RespReadLimit,
 		RetryPolicy:   c.cfg.RetryPolicy,
@@ -179,6 +179,18 @@ func (c *Client) getRequestConfiguration(configurations ...*RequestConfiguration
 		RetryWaitMin:  c.cfg.RetryWaitMin,
 		RetryWaitMax:  c.cfg.RetryWaitMax,
 		RetryBackoff:  c.cfg.RetryBackoff,
+	}
+
+	if c.cfg.Params != nil {
+		for k, v := range c.cfg.Params {
+			cfg.Params[k] = v
+		}
+	}
+
+	if c.cfg.Headers != nil {
+		for k, v := range c.cfg.Headers {
+			cfg.Headers[k] = v
+		}
 	}
 
 	for _, configuration := range configurations {
