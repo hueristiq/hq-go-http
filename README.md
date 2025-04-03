@@ -2,7 +2,7 @@
 
 ![made with go](https://img.shields.io/badge/made%20with-Go-1E90FF.svg) [![go report card](https://goreportcard.com/badge/github.com/hueristiq/hq-go-http)](https://goreportcard.com/report/github.com/hueristiq/hq-go-http) [![license](https://img.shields.io/badge/license-MIT-gray.svg?color=1E90FF)](https://github.com/hueristiq/hq-go-http/blob/master/LICENSE) ![maintenance](https://img.shields.io/badge/maintained%3F-yes-1E90FF.svg) [![open issues](https://img.shields.io/github/issues-raw/hueristiq/hq-go-http.svg?style=flat&color=1E90FF)](https://github.com/hueristiq/hq-go-http/issues?q=is:issue+is:open) [![closed issues](https://img.shields.io/github/issues-closed-raw/hueristiq/hq-go-http.svg?style=flat&color=1E90FF)](https://github.com/hueristiq/hq-go-http/issues?q=is:issue+is:closed) [![contribution](https://img.shields.io/badge/contributions-welcome-1E90FF.svg)](https://github.com/hueristiq/hq-go-http/blob/master/CONTRIBUTING.md)
 
-`hq-go-http` is a [Go (Golang)](http://golang.org/) package for robust and flexible HTTP communication. It offers advanced features such as configurable retry policies, automatic fallback between HTTP/1.x and HTTP/2, and fluent request building with connection management.
+`hq-go-http` is a [Go (Golang)](http://golang.org/) package for robust and flexible HTTP communication. It provides advanced features such as configurable retry policies, automatic fallback between HTTP/1.x and HTTP/2, and fluent request building with connection management.
 
 ## Resource
 
@@ -14,9 +14,9 @@
 
 ## Features
 
-- **Configurable Retry Logic:** Customize retry policies and backoff to handle transient network errors gracefully.
 - **HTTP/1.x and HTTP/2 Support:** The client maintains both HTTP/1.x and HTTP/2 clients. If the HTTP/1.x client encounters a specific transport error, the package automatically falls back to HTTP/2.
-- **Connection Management:** Automatically drain and close idle connections to prevent resource exhaustion.
+- **Connection Management:** Automatically manages idle connections to prevent resource exhaustion, ensuring that connections are properly drained and closed when no longer needed.
+- **Configurable Retry Logic:** Customize the maximum number of retries, set minimum/maximum wait times, and choose your backoff strategy (e.g., exponential backoff with jitter).
 
 ## Installation
 
