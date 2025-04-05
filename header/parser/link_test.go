@@ -68,7 +68,7 @@ func TestLinkParameter(t *testing.T) {
 	}
 
 	assert.Equal(t, "bar", link.Parameter("foo"))
-	assert.Equal(t, "", link.Parameter("baz"))
+	assert.Empty(t, link.Parameter("baz"))
 }
 
 func TestLinksString(t *testing.T) {

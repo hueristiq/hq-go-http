@@ -34,7 +34,7 @@ func TestNew(t *testing.T) {
 
 		buf := make([]byte, len(expected))
 
-		n, err := req.Request.Body.Read(buf)
+		n, err := req.Body.Read(buf)
 
 		require.NoError(t, err)
 
@@ -62,7 +62,7 @@ func TestNew(t *testing.T) {
 
 		buf := make([]byte, len(expected))
 
-		n, err := req.Request.Body.Read(buf)
+		n, err := req.Body.Read(buf)
 
 		require.NoError(t, err)
 
@@ -89,7 +89,7 @@ func TestNew(t *testing.T) {
 
 		buf := make([]byte, len(expected))
 
-		n, err := req.Request.Body.Read(buf)
+		n, err := req.Body.Read(buf)
 
 		require.NoError(t, err)
 
@@ -117,12 +117,12 @@ func TestNew(t *testing.T) {
 
 		require.NoError(t, err)
 		require.NotNil(t, req)
-		require.NotNil(t, req.Request.Body)
-		require.Equal(t, int64(len(bodyStr)), req.Request.ContentLength)
+		require.NotNil(t, req.Body)
+		require.Equal(t, int64(len(bodyStr)), req.ContentLength)
 
 		buf := make([]byte, len(bodyStr))
 
-		n, err := req.Request.Body.Read(buf)
+		n, err := req.Body.Read(buf)
 
 		require.NoError(t, err)
 
@@ -131,7 +131,7 @@ func TestNew(t *testing.T) {
 
 		buf2 := make([]byte, len(bodyStr))
 
-		n, err = req.Request.Body.Read(buf2)
+		n, err = req.Body.Read(buf2)
 
 		require.NoError(t, err)
 
@@ -156,7 +156,7 @@ func TestNew(t *testing.T) {
 
 		buf := make([]byte, len(expected))
 
-		n, err := req.Request.Body.Read(buf)
+		n, err := req.Body.Read(buf)
 
 		require.NoError(t, err)
 
@@ -179,7 +179,7 @@ func TestNewWithContext(t *testing.T) {
 
 	type Key string
 
-	ctx := context.WithValue(context.Background(), Key("key"), "value")
+	ctx := context.WithValue(t.Context(), Key("key"), "value")
 
 	req, err := request.NewWithContext(ctx, "GET", "http://example.com", nil)
 
