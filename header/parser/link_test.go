@@ -3,9 +3,9 @@ package parser_test
 import (
 	"testing"
 
+	"github.com/hueristiq/hq-go-http/header/parser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.source.hueristiq.com/http/header/parser"
 )
 
 func TestLinkString(t *testing.T) {

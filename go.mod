@@ -1,11 +1,11 @@
-module go.source.hueristiq.com/http
+module github.com/hueristiq/hq-go-http
 
 go 1.24.2
 
 require (
+	github.com/hueristiq/hq-go-retrier v0.0.0-20250405140726-f6ceb0b56fa3
+	github.com/hueristiq/hq-go-url v0.0.0-20250405142143-8bac2f398701
 	github.com/stretchr/testify v1.10.0
-	go.source.hueristiq.com/retrier v0.0.0-20250403103217-c128c08550b0
-	go.source.hueristiq.com/url v0.0.0-20250403103423-4acbcf6bb9a9
 	golang.org/x/net v0.38.0
 )
 

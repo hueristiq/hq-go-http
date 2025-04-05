@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hueristiq/hq-go-http/request"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.source.hueristiq.com/http/request"
 )
 
 func TestNew(t *testing.T) {

@@ -14,10 +14,10 @@ import (
 	"time"
 	"unsafe"
 
+	hqhttp "github.com/hueristiq/hq-go-http"
+	"github.com/hueristiq/hq-go-http/status"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	hqhttp "go.source.hueristiq.com/http"
-	"go.source.hueristiq.com/http/status"
 )
 
 type RoundTripFunc func(req *http.Request) (*http.Response, error)

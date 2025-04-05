@@ -23,7 +23,7 @@
 To install `hq-go-http`, run:
 
 ```bash
-go get -v -u go.source.hueristiq.com/http
+go get -v -u github.com/hueristiq/hq-go-http
 ```
 
 Make sure your Go environment is set up properly (Go 1.x or later is recommended).
@@ -38,7 +38,7 @@ package main
 import (
 	"log"
 
-	hqgohttp "go.source.hueristiq.com/http"
+	hqgohttp "github.com/hueristiq/hq-go-http"
 )
 
 func main() {

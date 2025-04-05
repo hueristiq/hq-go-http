@@ -10,10 +10,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go.source.hueristiq.com/http/method"
-	"go.source.hueristiq.com/http/request"
-	"go.source.hueristiq.com/retrier"
-	"go.source.hueristiq.com/retrier/backoff"
+	"github.com/hueristiq/hq-go-http/method"
+	"github.com/hueristiq/hq-go-http/request"
+	hqgoretrier "github.com/hueristiq/hq-go-retrier"
+	"github.com/hueristiq/hq-go-retrier/backoff"
 	"golang.org/x/net/http2"
 )
 
@@ -56,7 +56,7 @@ func (c *Client) Do(req *request.Request, cfg *RequestConfiguration) (res *http.
 
 	defer cancel()
 
-	res, err = retrier.RetryWithData(ctx, func() (res *http.Response, err error) {
+	res, err = hqgoretrier.RetryWithData(ctx, func() (res *http.Response, err error) {
 		res, err = c.internalHTTPClient.Do(req.Request)
 
 		if err != nil && isErrorHTTP1Broken(err) {
@@ -81,10 +81,10 @@ func (c *Client) Do(req *request.Request, cfg *RequestConfiguration) (res *http.
 
 		return
 	},
-		retrier.WithRetryMax(cfg.RetryMax),
-		retrier.WithRetryWaitMin(cfg.RetryWaitMin),
-		retrier.WithRetryWaitMax(cfg.RetryWaitMax),
-		retrier.WithRetryBackoff(cfg.RetryBackoff),
+		hqgoretrier.WithRetryMax(cfg.RetryMax),
+		hqgoretrier.WithRetryWaitMin(cfg.RetryWaitMin),
+		hqgoretrier.WithRetryWaitMax(cfg.RetryWaitMax),
+		hqgoretrier.WithRetryBackoff(cfg.RetryBackoff),
 	)
 	if err != nil {
 		if res != nil {
