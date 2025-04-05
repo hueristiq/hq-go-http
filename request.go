@@ -3,7 +3,7 @@ package http
 import (
 	"time"
 
-	"go.source.hueristiq.com/retrier/backoff"
+	"github.com/hueristiq/hq-go-retrier/backoff"
 )
 
 // RequestConfiguration holds settings specific to an individual HTTP request.

@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	"go.source.hueristiq.com/url/parser"
+	"github.com/hueristiq/hq-go-url/parser"
 )
 
 // Request is a wrapper around http.Request that enables the request body to be reusable.

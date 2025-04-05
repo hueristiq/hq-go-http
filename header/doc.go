@@ -9,7 +9,7 @@
 //
 //	import (
 //	    "fmt"
-//	    "go.source.hueristiq.com/http/header"
+//	    "github.com/hueristiq/hq-go-http/header"
 //	)
 //
 //	func main() {

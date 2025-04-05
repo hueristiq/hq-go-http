@@ -12,12 +12,12 @@
 //	    "log"
 //	    "time"
 //
-//	    "go.source.hueristiq.com/http"
+//	    hqgohttp "github.com/hueristiq/hq-go-http"
 //	)
 //
 //	func main() {
 //	    // Initialize a new HTTP client using the default single-use configuration.
-//	    client, err := http.NewClient(http.DefaultSingleClientConfiguration)
+//	    client, err := hqgohttp.NewClient(hqgohttp.DefaultSingleClientConfiguration)
 //	    if err != nil {
 //	        log.Fatalf("Failed to create HTTP client: %v", err)
 //	    }
