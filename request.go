@@ -3,6 +3,7 @@ package http
 import (
 	"time"
 
+	"github.com/hueristiq/hq-go-http/method"
 	"github.com/hueristiq/hq-go-retrier/backoff"
 )
 
@@ -14,7 +15,7 @@ import (
 // before execution.
 //
 // Fields:
-//   - Method (string): The HTTP method for the request (e.g., GET, POST, PUT, etc.).
+//   - Method (method.Method): The HTTP method for the request (e.g., GET, POST, PUT, etc.).
 //   - BaseURL (string): An optional base URL to be prefixed to the URL, overriding the global BaseURL.
 //   - URL (string): The target URL or path for the request.
 //   - Params (map[string]string): Query parameters to append to the URL.
@@ -27,7 +28,7 @@ import (
 //   - RetryWaitMax (time.Duration): The maximum duration to wait between retries.
 //   - RetryBackoff (backoff.Backoff): The strategy used to calculate backoff delays between retries.
 type RequestConfiguration struct {
-	Method        string
+	Method        method.Method
 	BaseURL       string
 	URL           string
 	Params        map[string]string
