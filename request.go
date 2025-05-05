@@ -18,7 +18,7 @@ import (
 //   - BaseURL (string): An optional base URL to be prefixed to the URL, overriding the global BaseURL.
 //   - URL (string): The target URL or path for the request.
 //   - Params (map[string]string): Query parameters to append to the URL.
-//   - Headers (map[string]string): HTTP headers to include with the request.
+//   - Headers ([]Header): HTTP headers to include with the request.
 //   - Body (interface{}): The request body, if applicable.
 //   - RespReadLimit (int64): The maximum number of bytes to read from a response body when draining.
 //   - RetryPolicy (RetryPolicy): A function to determine retry behavior for this specific request.
@@ -31,7 +31,7 @@ type RequestConfiguration struct {
 	BaseURL       string
 	URL           string
 	Params        map[string]string
-	Headers       map[string]string
+	Headers       []Header
 	Body          interface{}
 	RespReadLimit int64
 	RetryPolicy   RetryPolicy

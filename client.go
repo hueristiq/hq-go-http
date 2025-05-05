@@ -145,8 +145,13 @@ func (c *Client) Request(configurations ...*RequestConfiguration) (res *http.Res
 		return
 	}
 
-	for key, value := range cfg.Headers {
-		req.Header.Set(key, value)
+	for _, header := range cfg.Headers {
+		switch header.mode {
+		case HeaderModeAdd:
+			req.Header.Add(header.key, header.value)
+		case HeaderModeSet:
+			req.Header.Set(header.key, header.value)
+		}
 	}
 
 	res, err = c.Do(req, cfg)
@@ -171,7 +176,7 @@ func (c *Client) getRequestConfiguration(configurations ...*RequestConfiguration
 		BaseURL:       c.cfg.BaseURL,
 		URL:           c.cfg.URL,
 		Params:        make(map[string]string),
-		Headers:       make(map[string]string),
+		Headers:       []Header{},
 		Body:          c.cfg.Body,
 		RespReadLimit: c.cfg.RespReadLimit,
 		RetryPolicy:   c.cfg.RetryPolicy,
@@ -188,9 +193,7 @@ func (c *Client) getRequestConfiguration(configurations ...*RequestConfiguration
 	}
 
 	if c.cfg.Headers != nil {
-		for k, v := range c.cfg.Headers {
-			cfg.Headers[k] = v
-		}
+		cfg.Headers = append(cfg.Headers, c.cfg.Headers...)
 	}
 
 	for _, configuration := range configurations {
@@ -213,9 +216,7 @@ func (c *Client) getRequestConfiguration(configurations ...*RequestConfiguration
 		}
 
 		if configuration.Headers != nil {
-			for k, v := range configuration.Headers {
-				cfg.Headers[k] = v
-			}
+			cfg.Headers = append(cfg.Headers, configuration.Headers...)
 		}
 
 		if configuration.Body != "" {
@@ -418,7 +419,7 @@ func (c *Client) Options(URL string, configurations ...*RequestConfiguration) (r
 //   - BaseURL (string): A base URL that is prefixed to all request URLs.
 //   - URL (string): The default URL path that can be combined with BaseURL.
 //   - Params (map[string]string): Default query parameters appended to every request.
-//   - Headers (map[string]string): Default HTTP headers included in every request.
+//   - Headers ([]Header): Default HTTP headers included in every request.
 //   - Body (interface{}): The default request body; can be overridden per request.
 //   - RespReadLimit (int64): The maximum number of bytes to drain from a response body to allow connection reuse.
 //   - RetryPolicy (RetryPolicy): A function that determines whether a request should be retried.
@@ -435,7 +436,7 @@ type ClientConfiguration struct {
 	BaseURL       string
 	URL           string
 	Params        map[string]string
-	Headers       map[string]string
+	Headers       []Header
 	Body          interface{}
 	RespReadLimit int64
 	RetryPolicy   RetryPolicy
@@ -459,7 +460,7 @@ func (c *ClientConfiguration) Configuration() (configuration *ClientConfiguratio
 	}
 
 	if configuration.Headers == nil {
-		configuration.Headers = make(map[string]string)
+		configuration.Headers = []Header{}
 	}
 
 	if configuration.RetryPolicy == nil {
