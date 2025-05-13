@@ -227,21 +227,6 @@ func (s Status) IsServerError() (isServerError bool) {
 	return s >= 500 && s < 600
 }
 
-// Interface defines a common interface for types that represent HTTP status codes.
-//
-// Any type that implements these methods—providing access to the numeric code,
-// its description, and categorization—satisfies this interface. This abstraction
-// enables flexibility when extending or wrapping HTTP status functionality.
-type Interface interface {
-	Int() (status int)
-	IsInformational() (isInformational bool)
-	IsSuccess() (isSuccess bool)
-	IsRedirection() (isRedirection bool)
-	IsError() (isError bool)
-	IsClientError() (isClientError bool)
-	IsServerError() (isServerError bool)
-}
-
 // Predefined Status type constants.
 //
 // The following constants define standard HTTP status codes, grouped by category.
@@ -309,10 +294,3 @@ const (
 	NotExtended                   Status = 510
 	NetworkAuthenticationRequired Status = 511
 )
-
-// Compile-time interface check to ensure that Status implements the Interface.
-//
-// This assignment will trigger a compile-time error if Status does not provide
-// all the methods required by the Interface, ensuring the consistency and correctness
-// of the implementation.
-var _ Interface = (*Status)(nil)

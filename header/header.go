@@ -20,15 +20,6 @@ func (h Header) String() (header string) {
 	return
 }
 
-// Interface defines a common interface for types that represent HTTP header fields.
-//
-// Any type that implements a String() method returning a string can be used interchangeably
-// with Header. This abstraction is useful if additional types or wrappers need to adhere
-// to the same contract as Header for representing HTTP headers.
-type Interface interface {
-	String() (header string)
-}
-
 // Predefined HTTP header constants.
 //
 // The constants below represent commonly used HTTP header fields as defined by IANA.
@@ -156,9 +147,3 @@ const (
 	XXSSProtection                  Header = "X-XSS-Protection"
 	XRatelimitRemaining             Header = "X-Ratelimit-Remaining"
 )
-
-// Compile-time interface check to ensure Header implements Interface.
-//
-// This assignment forces a compile-time error if Header does not implement
-// the required String() method of the Interface, ensuring consistency.
-var _ Interface = (*Header)(nil)

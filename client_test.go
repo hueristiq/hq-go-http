@@ -14,7 +14,7 @@ import (
 	"time"
 	"unsafe"
 
-	hqhttp "github.com/hueristiq/hq-go-http"
+	hqgohttp "github.com/hueristiq/hq-go-http"
 	"github.com/hueristiq/hq-go-http/status"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,7 +50,7 @@ var (
 	ErrTemporary                          = errors.New("temporary error")
 )
 
-func setInternalHTTP2Transport(c *hqhttp.Client, rt http.RoundTripper) (err error) {
+func setInternalHTTP2Transport(c *hqgohttp.Client, rt http.RoundTripper) (err error) {
 	// Get the pointer to the client's underlying value.
 	v := reflect.ValueOf(c).Elem()
 
@@ -80,7 +80,7 @@ func setInternalHTTP2Transport(c *hqhttp.Client, rt http.RoundTripper) (err erro
 func TestNewClient(t *testing.T) {
 	t.Parallel()
 
-	cfg := &hqhttp.ClientConfiguration{
+	cfg := &hqgohttp.ClientConfiguration{
 		Client:               nil,
 		CloseIdleConnections: false,
 		Timeout:              10 * time.Second,
@@ -92,7 +92,7 @@ func TestNewClient(t *testing.T) {
 		RespReadLimit:        4096,
 	}
 
-	client, err := hqhttp.NewClient(cfg)
+	client, err := hqgohttp.NewClient(cfg)
 
 	require.NoError(t, err)
 	require.NotNil(t, client)
@@ -110,7 +110,7 @@ func TestDo(t *testing.T) {
 		return fakeResp, nil
 	})
 
-	cfg := &hqhttp.ClientConfiguration{
+	cfg := &hqgohttp.ClientConfiguration{
 		Timeout:              5 * time.Second,
 		RetryPolicy:          func(_ context.Context, _ error) (bool, error) { return false, nil },
 		RetryMax:             1,
@@ -121,11 +121,11 @@ func TestDo(t *testing.T) {
 		Client:               &http.Client{Transport: fakeRT},
 	}
 
-	client, err := hqhttp.NewClient(cfg)
+	client, err := hqgohttp.NewClient(cfg)
 
 	require.NoError(t, err)
 
-	res, err := client.Request(&hqhttp.RequestConfiguration{
+	res, err := client.Request(&hqgohttp.RequestConfiguration{
 		Method: "GET",
 		URL:    "/test",
 	})
@@ -160,7 +160,7 @@ func TestDoFallbackToHTTP2(t *testing.T) {
 		return
 	})
 
-	cfg := &hqhttp.ClientConfiguration{
+	cfg := &hqgohttp.ClientConfiguration{
 		Timeout:              5 * time.Second,
 		RetryPolicy:          func(_ context.Context, _ error) (bool, error) { return false, nil },
 		RetryMax:             1,
@@ -171,7 +171,7 @@ func TestDoFallbackToHTTP2(t *testing.T) {
 		Client:               &http.Client{Transport: fakeRT1},
 	}
 
-	client, err := hqhttp.NewClient(cfg)
+	client, err := hqgohttp.NewClient(cfg)
 
 	require.NoError(t, err)
 
@@ -181,7 +181,7 @@ func TestDoFallbackToHTTP2(t *testing.T) {
 	require.NoError(t, err)
 
 	// Issue the request.
-	res, err := client.Request(&hqhttp.RequestConfiguration{
+	res, err := client.Request(&hqgohttp.RequestConfiguration{
 		Method: "GET",
 		URL:    "/fallback",
 	})
@@ -212,7 +212,7 @@ func TestCloseIdleConnections(t *testing.T) {
 		}),
 	}
 
-	cfg := &hqhttp.ClientConfiguration{
+	cfg := &hqgohttp.ClientConfiguration{
 		Timeout:              5 * time.Second,
 		RetryPolicy:          func(_ context.Context, _ error) (bool, error) { return false, nil },
 		RetryMax:             1,
@@ -223,13 +223,13 @@ func TestCloseIdleConnections(t *testing.T) {
 		Client:               &http.Client{Transport: ft},
 	}
 
-	client, err := hqhttp.NewClient(cfg)
+	client, err := hqgohttp.NewClient(cfg)
 
 	require.NoError(t, err)
 
 	// Issue 101 requests. The internal counter should cause CloseIdleConnections to be called once.
 	for range 101 {
-		res, err := client.Request(&hqhttp.RequestConfiguration{
+		res, err := client.Request(&hqgohttp.RequestConfiguration{
 			Method: "GET",
 			URL:    "/ping",
 		})
@@ -252,7 +252,7 @@ func TestExhaustedRetries(t *testing.T) {
 		return
 	})
 
-	cfg := &hqhttp.ClientConfiguration{
+	cfg := &hqgohttp.ClientConfiguration{
 		Timeout: 5 * time.Second,
 		// Always retry.
 		RetryPolicy:          func(_ context.Context, _ error) (bool, error) { return true, nil },
@@ -264,12 +264,12 @@ func TestExhaustedRetries(t *testing.T) {
 		Client:               &http.Client{Transport: fakeRT},
 	}
 
-	client, err := hqhttp.NewClient(cfg)
+	client, err := hqgohttp.NewClient(cfg)
 
 	require.NoError(t, err)
 
 	// Issue the request.
-	res, err := client.Request(&hqhttp.RequestConfiguration{
+	res, err := client.Request(&hqgohttp.RequestConfiguration{
 		Method:  "GET",
 		BaseURL: "http://example.com",
 		URL:     "/retry",
@@ -307,7 +307,7 @@ func TestRequestConfigurationMerging(t *testing.T) {
 		return
 	})
 
-	cfg := &hqhttp.ClientConfiguration{
+	cfg := &hqgohttp.ClientConfiguration{
 		Timeout:              5 * time.Second,
 		RetryPolicy:          func(_ context.Context, _ error) (bool, error) { return false, nil },
 		RetryMax:             1,
@@ -319,20 +319,24 @@ func TestRequestConfigurationMerging(t *testing.T) {
 		// Set some default values.
 		BaseURL: "http://example.com",
 		URL:     "default",
-		Headers: map[string]string{"X-Default": "defaultValue"},
-		Params:  map[string]string{"default": "1"},
+		Headers: []hqgohttp.Header{
+			hqgohttp.NewHeader("X-Default", "defaultValue", hqgohttp.HeaderModeSet),
+		},
+		Params: map[string]string{"default": "1"},
 	}
 
-	client, err := hqhttp.NewClient(cfg)
+	client, err := hqgohttp.NewClient(cfg)
 
 	require.NoError(t, err)
 
 	// Provide request-specific overrides.
-	res, err := client.Request(&hqhttp.RequestConfiguration{
-		Method:  "GET",
-		URL:     "api",
-		Headers: map[string]string{"X-Override": "overrideValue"},
-		Params:  map[string]string{"q": "test"},
+	res, err := client.Request(&hqgohttp.RequestConfiguration{
+		Method: "GET",
+		URL:    "api",
+		Headers: []hqgohttp.Header{
+			hqgohttp.NewHeader("X-Override", "overrideValue", hqgohttp.HeaderModeSet),
+		},
+		Params: map[string]string{"q": "test"},
 	})
 
 	require.NoError(t, err)
@@ -373,7 +377,7 @@ func TestConvenienceMethods(t *testing.T) {
 		return
 	})
 
-	cfg := &hqhttp.ClientConfiguration{
+	cfg := &hqgohttp.ClientConfiguration{
 		Timeout:              5 * time.Second,
 		RetryPolicy:          func(_ context.Context, _ error) (bool, error) { return false, nil },
 		RetryMax:             1,
@@ -385,7 +389,7 @@ func TestConvenienceMethods(t *testing.T) {
 		BaseURL:              "http://example.com",
 	}
 
-	client, err := hqhttp.NewClient(cfg)
+	client, err := hqgohttp.NewClient(cfg)
 
 	require.NoError(t, err)
 

@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/hueristiq/hq-go-http/header"
 	"github.com/hueristiq/hq-go-http/method"
 	"github.com/hueristiq/hq-go-http/request"
 	hqgoretrier "github.com/hueristiq/hq-go-retrier"
@@ -140,13 +141,18 @@ func (c *Client) Request(configurations ...*RequestConfiguration) (res *http.Res
 
 	var req *request.Request
 
-	req, err = request.New(cfg.Method, cfg.URL, cfg.Body)
+	req, err = request.New(cfg.Method.String(), cfg.URL, cfg.Body)
 	if err != nil {
 		return
 	}
 
-	for key, value := range cfg.Headers {
-		req.Header.Set(key, value)
+	for _, header := range cfg.Headers {
+		switch header.mode {
+		case HeaderModeAdd:
+			req.Header.Add(header.key, header.value)
+		case HeaderModeSet:
+			req.Header.Set(header.key, header.value)
+		}
 	}
 
 	res, err = c.Do(req, cfg)
@@ -171,7 +177,7 @@ func (c *Client) getRequestConfiguration(configurations ...*RequestConfiguration
 		BaseURL:       c.cfg.BaseURL,
 		URL:           c.cfg.URL,
 		Params:        make(map[string]string),
-		Headers:       make(map[string]string),
+		Headers:       []Header{},
 		Body:          c.cfg.Body,
 		RespReadLimit: c.cfg.RespReadLimit,
 		RetryPolicy:   c.cfg.RetryPolicy,
@@ -188,9 +194,7 @@ func (c *Client) getRequestConfiguration(configurations ...*RequestConfiguration
 	}
 
 	if c.cfg.Headers != nil {
-		for k, v := range c.cfg.Headers {
-			cfg.Headers[k] = v
-		}
+		cfg.Headers = append(cfg.Headers, c.cfg.Headers...)
 	}
 
 	for _, configuration := range configurations {
@@ -213,9 +217,7 @@ func (c *Client) getRequestConfiguration(configurations ...*RequestConfiguration
 		}
 
 		if configuration.Headers != nil {
-			for k, v := range configuration.Headers {
-				cfg.Headers[k] = v
-			}
+			cfg.Headers = append(cfg.Headers, configuration.Headers...)
 		}
 
 		if configuration.Body != "" {
@@ -288,7 +290,7 @@ func (c *Client) getRequestConfiguration(configurations ...*RequestConfiguration
 //   - err (error): An error if the request fails.
 func (c *Client) Get(URL string, configurations ...*RequestConfiguration) (res *http.Response, err error) {
 	configurations = append(configurations, &RequestConfiguration{
-		Method: method.GET.String(),
+		Method: method.GET,
 		URL:    URL,
 	})
 
@@ -309,7 +311,7 @@ func (c *Client) Get(URL string, configurations ...*RequestConfiguration) (res *
 //   - err (error): An error if the request fails.
 func (c *Client) Head(URL string, configurations ...*RequestConfiguration) (res *http.Response, err error) {
 	configurations = append(configurations, &RequestConfiguration{
-		Method: method.HEAD.String(),
+		Method: method.HEAD,
 		URL:    URL,
 	})
 
@@ -331,7 +333,7 @@ func (c *Client) Head(URL string, configurations ...*RequestConfiguration) (res 
 //   - err (error): An error if the request fails.
 func (c *Client) Put(URL string, body interface{}, configurations ...*RequestConfiguration) (res *http.Response, err error) {
 	configurations = append(configurations, &RequestConfiguration{
-		Method: method.PUT.String(),
+		Method: method.PUT,
 		URL:    URL,
 		Body:   body,
 	})
@@ -353,7 +355,7 @@ func (c *Client) Put(URL string, body interface{}, configurations ...*RequestCon
 //   - err (error): An error if the request fails.
 func (c *Client) Delete(URL string, configurations ...*RequestConfiguration) (res *http.Response, err error) {
 	configurations = append(configurations, &RequestConfiguration{
-		Method: method.DELETE.String(),
+		Method: method.DELETE,
 		URL:    URL,
 	})
 
@@ -375,7 +377,7 @@ func (c *Client) Delete(URL string, configurations ...*RequestConfiguration) (re
 //   - err (error): An error if the request fails.
 func (c *Client) Post(URL string, body interface{}, configurations ...*RequestConfiguration) (res *http.Response, err error) {
 	configurations = append(configurations, &RequestConfiguration{
-		Method: method.POST.String(),
+		Method: method.POST,
 		URL:    URL,
 		Body:   body,
 	})
@@ -397,7 +399,7 @@ func (c *Client) Post(URL string, body interface{}, configurations ...*RequestCo
 //   - err (error): An error if the request fails.
 func (c *Client) Options(URL string, configurations ...*RequestConfiguration) (res *http.Response, err error) {
 	configurations = append(configurations, &RequestConfiguration{
-		Method: method.OPTIONS.String(),
+		Method: method.OPTIONS,
 		URL:    URL,
 	})
 
@@ -414,11 +416,11 @@ func (c *Client) Options(URL string, configurations ...*RequestConfiguration) (r
 //   - Client (*http.Client): An optional custom HTTP client to be used. If nil, a default client is used.
 //   - Timeout (time.Duration): The maximum duration allowed for each HTTP request.
 //   - CloseIdleConnections (bool): Determines whether idle connections should be periodically closed.
-//   - Method (string): The default HTTP method to use (e.g., GET, POST) if not overridden.
+//   - Method (method.Method): The default HTTP method to use (e.g., GET, POST) if not overridden.
 //   - BaseURL (string): A base URL that is prefixed to all request URLs.
 //   - URL (string): The default URL path that can be combined with BaseURL.
 //   - Params (map[string]string): Default query parameters appended to every request.
-//   - Headers (map[string]string): Default HTTP headers included in every request.
+//   - Headers ([]Header): Default HTTP headers included in every request.
 //   - Body (interface{}): The default request body; can be overridden per request.
 //   - RespReadLimit (int64): The maximum number of bytes to drain from a response body to allow connection reuse.
 //   - RetryPolicy (RetryPolicy): A function that determines whether a request should be retried.
@@ -431,11 +433,11 @@ type ClientConfiguration struct {
 	Timeout              time.Duration
 	CloseIdleConnections bool
 
-	Method        string
+	Method        method.Method
 	BaseURL       string
 	URL           string
 	Params        map[string]string
-	Headers       map[string]string
+	Headers       []Header
 	Body          interface{}
 	RespReadLimit int64
 	RetryPolicy   RetryPolicy
@@ -459,7 +461,9 @@ func (c *ClientConfiguration) Configuration() (configuration *ClientConfiguratio
 	}
 
 	if configuration.Headers == nil {
-		configuration.Headers = make(map[string]string)
+		configuration.Headers = []Header{
+			NewHeader(header.UserAgent.String(), "hq-go-http (https://github.com/hueristiq/hq-go-http.git)", HeaderModeAdd),
+		}
 	}
 
 	if configuration.RetryPolicy == nil {

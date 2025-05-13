@@ -19,15 +19,6 @@ func (m Method) String() (method string) {
 	return
 }
 
-// Interface defines the contract for any type representing an HTTP method.
-//
-// Any type that implements the String() method returning a string is considered to satisfy this interface.
-// This abstraction is useful when you need to work with various types that represent HTTP methods while
-// ensuring they can all be converted to a string for processing.
-type Interface interface {
-	String() (method string)
-}
-
 // Predefined HTTP method constants.
 //
 // These constants represent the most common HTTP methods and are declared as type Method to ensure
@@ -45,9 +36,3 @@ const (
 	PUT     Method = "PUT"
 	TRACE   Method = "TRACE"
 )
-
-// Compile-time interface check to ensure Method implements Interface.
-//
-// This assignment forces a compile-time error if Method does not implement
-// the required String() method of the Interface, ensuring consistency.
-var _ Interface = (*Method)(nil)
