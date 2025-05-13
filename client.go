@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/hueristiq/hq-go-http/header"
 	"github.com/hueristiq/hq-go-http/method"
 	"github.com/hueristiq/hq-go-http/request"
 	hqgoretrier "github.com/hueristiq/hq-go-retrier"
@@ -460,7 +461,9 @@ func (c *ClientConfiguration) Configuration() (configuration *ClientConfiguratio
 	}
 
 	if configuration.Headers == nil {
-		configuration.Headers = []Header{}
+		configuration.Headers = []Header{
+			NewHeader(header.UserAgent.String(), "hq-go-http (https://github.com/hueristiq/hq-go-http.git)", HeaderModeAdd),
+		}
 	}
 
 	if configuration.RetryPolicy == nil {
