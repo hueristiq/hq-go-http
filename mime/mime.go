@@ -19,15 +19,6 @@ func (m MIME) String() (mime string) {
 	return string(m)
 }
 
-// Interface defines a contract for types that represent MIME types.
-//
-// Any type that implements the String() method returning a string is considered
-// to satisfy this interface. This abstraction enables different implementations or
-// wrappers of MIME types to be used interchangeably.
-type Interface interface {
-	String() (mime string)
-}
-
 // Predefined MIME type constants.
 //
 // These constants represent a wide range of commonly used MIME types as defined by IANA.
@@ -108,9 +99,3 @@ const (
 	XUL                      MIME = "application/vnd.mozilla.xul+xml"
 	ZIPArchive               MIME = "application/zip"
 )
-
-// Compile-time interface check to ensure MIME implements Interface.
-//
-// This assignment forces a compile-time error if MIME does not implement
-// the required String() method of the Interface, ensuring consistency.
-var _ Interface = (*MIME)(nil)

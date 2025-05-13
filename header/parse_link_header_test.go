@@ -1,9 +1,9 @@
-package parser_test
+package header_test
 
 import (
 	"testing"
 
-	"github.com/hueristiq/hq-go-http/header/parser"
+	"github.com/hueristiq/hq-go-http/header"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -11,7 +11,7 @@ import (
 func TestLinkString(t *testing.T) {
 	t.Parallel()
 
-	link := parser.Link{
+	link := header.ParsedLink{
 		URL: "http://example.com",
 		Rel: "next",
 		Parameters: map[string]string{
@@ -32,7 +32,7 @@ func TestLinkString(t *testing.T) {
 func TestLinkString_EmptyRelAndParams(t *testing.T) {
 	t.Parallel()
 
-	link := parser.Link{
+	link := header.ParsedLink{
 		URL:        "http://example.com",
 		Rel:        "",
 		Parameters: map[string]string{},
@@ -46,7 +46,7 @@ func TestLinkString_EmptyRelAndParams(t *testing.T) {
 func TestLinkHasParameter(t *testing.T) {
 	t.Parallel()
 
-	link := parser.Link{
+	link := header.ParsedLink{
 		URL: "http://example.com",
 		Parameters: map[string]string{
 			"foo": "bar",
@@ -60,7 +60,7 @@ func TestLinkHasParameter(t *testing.T) {
 func TestLinkParameter(t *testing.T) {
 	t.Parallel()
 
-	link := parser.Link{
+	link := header.ParsedLink{
 		URL: "http://example.com",
 		Parameters: map[string]string{
 			"foo": "bar",
@@ -74,7 +74,7 @@ func TestLinkParameter(t *testing.T) {
 func TestLinksString(t *testing.T) {
 	t.Parallel()
 
-	links := parser.Links{
+	links := header.ParsedLinks{
 		{
 			URL: "http://example.com",
 			Rel: "next",
@@ -106,7 +106,7 @@ func TestLinksString(t *testing.T) {
 func TestLinksFilterByRel(t *testing.T) {
 	t.Parallel()
 
-	links := parser.Links{
+	links := header.ParsedLinks{
 		{
 			URL: "http://example.com/next",
 			Rel: "next",
@@ -133,7 +133,7 @@ func TestLinksFilterByRel(t *testing.T) {
 func TestParseLinkHeader_Empty(t *testing.T) {
 	t.Parallel()
 
-	links := parser.ParseLinkHeader("")
+	links := header.ParseLinkHeader("")
 
 	assert.Empty(t, links)
 }
@@ -143,7 +143,7 @@ func TestParseLinkHeader_Single(t *testing.T) {
 
 	raw := `<http://example.com>; rel="next"; foo="bar"`
 
-	links := parser.ParseLinkHeader(raw)
+	links := header.ParseLinkHeader(raw)
 
 	require.Len(t, links, 1)
 
@@ -159,7 +159,7 @@ func TestParseLinkHeader_Multiple(t *testing.T) {
 
 	raw := `<http://example.com>; rel="next"; foo="bar", <http://example.org>; rel="prev"; baz="qux"`
 
-	links := parser.ParseLinkHeader(raw)
+	links := header.ParseLinkHeader(raw)
 
 	require.Len(t, links, 2)
 
@@ -184,7 +184,7 @@ func TestParseLinkHeaders(t *testing.T) {
 		`<http://example.org>; rel="prev"; baz="qux"`,
 	}
 
-	links := parser.ParseLinkHeaders(headers)
+	links := header.ParseLinkHeaders(headers)
 
 	require.Len(t, links, 2)
 
