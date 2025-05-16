@@ -9,11 +9,11 @@
 //
 //	import (
 //	    "fmt"
-//	    "github.com/hueristiq/hq-go-http/header"
+//	    hqgohttpheader "github.com/hueristiq/hq-go-http/header"
 //	)
 //
 //	func main() {
-//	    h := header.Authorization
+//	    h := hqgohttpheader.Authorization
 //	    fmt.Println("HTTP Header:", h.String()) // Output: "Authorization"
 //	}
 //

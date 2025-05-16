@@ -16,7 +16,9 @@ type MIME string
 // Returns:
 //   - mime (string): The MIME type as a plain string.
 func (m MIME) String() (mime string) {
-	return string(m)
+	mime = string(m)
+
+	return
 }
 
 // Predefined MIME type constants.

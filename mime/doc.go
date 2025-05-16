@@ -9,11 +9,11 @@
 //
 //	import (
 //	    "fmt"
-//	    "github.com/hueristiq/hq-go-http/mime"
+//	    hqgohttpmime "github.com/hueristiq/hq-go-http/mime"
 //	)
 //
 //	func main() {
-//	    ct := mime.JSON
+//	    ct := hqgohttpmime.JSON
 //	    fmt.Println("Content-Type:", ct.String()) // Output: "application/json"
 //	}
 //

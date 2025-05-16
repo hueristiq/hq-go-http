@@ -9,11 +9,11 @@
 //
 //	import (
 //	    "fmt"
-//	    "github.com/hueristiq/hq-go-http/method"
+//	    hqgohttpmethod "github.com/hueristiq/hq-go-http/method"
 //	)
 //
 //	func main() {
-//	    m := method.GET
+//	    m := hqgohttpmethod.GET
 //	    fmt.Println("HTTP Method:", m.String()) // Output: "GET"
 //	}
 //

@@ -147,10 +147,10 @@ func (c *Client) Request(configurations ...*RequestConfiguration) (res *http.Res
 	}
 
 	for _, header := range cfg.Headers {
-		switch header.mode {
-		case HeaderModeAdd:
+		switch header.operation {
+		case headerOperationAppend:
 			req.Header.Add(header.key, header.value)
-		case HeaderModeSet:
+		case headerOperationReplace:
 			req.Header.Set(header.key, header.value)
 		}
 	}
@@ -462,7 +462,7 @@ func (c *ClientConfiguration) Configuration() (configuration *ClientConfiguratio
 
 	if configuration.Headers == nil {
 		configuration.Headers = []Header{
-			NewHeader(header.UserAgent.String(), "hq-go-http (https://github.com/hueristiq/hq-go-http.git)", HeaderModeAdd),
+			NewSetHeader(header.UserAgent.String(), "hq-go-http (https://github.com/hueristiq/hq-go-http.git)"),
 		}
 	}
 
