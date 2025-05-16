@@ -9,12 +9,12 @@
 //
 //	import (
 //	    "fmt"
-//	    "github.com/hueristiq/hq-go-http/status"
+//	    hqgohttpstatus "github.com/hueristiq/hq-go-http/status"
 //	)
 //
 //	func main() {
 //	    // Create a status using one of the predefined constants.
-//	    s := status.OK
+//	    s := hqgohttpstatus.OK
 //	    fmt.Println("Status code:", s.Int())    // Output: 200
 //	    fmt.Println("Status text:", s.String())   // Output: "OK"
 //

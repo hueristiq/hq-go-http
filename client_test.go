@@ -320,7 +320,7 @@ func TestRequestConfigurationMerging(t *testing.T) {
 		BaseURL: "http://example.com",
 		URL:     "default",
 		Headers: []hqgohttp.Header{
-			hqgohttp.NewHeader("X-Default", "defaultValue", hqgohttp.HeaderModeSet),
+			hqgohttp.NewSetHeader("X-Default", "defaultValue"),
 		},
 		Params: map[string]string{"default": "1"},
 	}
@@ -334,7 +334,7 @@ func TestRequestConfigurationMerging(t *testing.T) {
 		Method: "GET",
 		URL:    "api",
 		Headers: []hqgohttp.Header{
-			hqgohttp.NewHeader("X-Override", "overrideValue", hqgohttp.HeaderModeSet),
+			hqgohttp.NewSetHeader("X-Override", "overrideValue"),
 		},
 		Params: map[string]string{"q": "test"},
 	})

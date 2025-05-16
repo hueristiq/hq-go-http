@@ -1,23 +1,33 @@
 package http
 
 type Header struct {
-	mode  mode
-	key   string
-	value string
+	key       string
+	value     string
+	operation headerOperation
 }
 
-type mode string
+type headerOperation string
 
 const (
-	HeaderModeAdd mode = "add"
-	HeaderModeSet mode = "set"
+	headerOperationAppend  headerOperation = "append"
+	headerOperationReplace headerOperation = "replace"
 )
 
-func NewHeader(key, value string, mode mode) (h Header) {
+func NewAddHeader(key, value string) (h Header) {
 	h = Header{
-		key:   key,
-		value: value,
-		mode:  mode,
+		key:       key,
+		value:     value,
+		operation: headerOperationAppend,
+	}
+
+	return
+}
+
+func NewSetHeader(key, value string) (h Header) {
+	h = Header{
+		key:       key,
+		value:     value,
+		operation: headerOperationReplace,
 	}
 
 	return
