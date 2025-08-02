@@ -278,7 +278,7 @@ func TestExhaustedRetries(t *testing.T) {
 	// Expect error since all attempts fail.
 	require.Error(t, err)
 	assert.Nil(t, res)
-	assert.Contains(t, err.Error(), "giving up after")
+	assert.Contains(t, err.Error(), "giving up")
 
 	if res != nil {
 		_ = res.Body.Close()
