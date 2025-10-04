@@ -3,10 +3,9 @@ package http
 import (
 	"context"
 	"crypto/x509"
+	"errors"
 	"net/url"
 	"regexp"
-
-	hqgoerrors "github.com/hueristiq/hq-go-errors"
 )
 
 // RetryPolicy defines a function type that determines if an HTTP request should be retried.
@@ -62,7 +61,7 @@ func isErrorRecoverable(ctx context.Context, err error) (recoverable bool, errr 
 
 	var URLError *url.Error
 
-	if err != nil && hqgoerrors.As(err, &URLError) {
+	if err != nil && errors.As(err, &URLError) {
 		if redirectsErrorRegex.MatchString(err.Error()) {
 			errr = err
 
@@ -77,7 +76,7 @@ func isErrorRecoverable(ctx context.Context, err error) (recoverable bool, errr 
 
 		var UnknownAuthorityError x509.UnknownAuthorityError
 
-		if hqgoerrors.As(err, &UnknownAuthorityError) {
+		if errors.As(err, &UnknownAuthorityError) {
 			errr = err
 
 			return

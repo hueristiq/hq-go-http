@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -9,7 +10,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	hqgoerrors "github.com/hueristiq/hq-go-errors"
 	"github.com/hueristiq/hq-go-http/header"
 	"github.com/hueristiq/hq-go-http/method"
 	"github.com/hueristiq/hq-go-http/request"
@@ -88,19 +88,15 @@ func (c *Client) Do(req *request.Request, cfg *RequestConfiguration) (res *http.
 		hqgoretrier.WithRetryBackoff(cfg.RetryBackoff),
 	)
 	if err != nil {
-		options := []hqgoerrors.OptionFunc{
-			hqgoerrors.WithField("attemps", cfg.RetryMax),
-			hqgoerrors.WithField("method", req.Method),
-			hqgoerrors.WithField("url", req.URL),
-		}
+		msg := fmt.Sprintf("giving up after %d attempts (method: %s, url: %s)", cfg.RetryMax, req.Method, req.URL)
 
 		if res != nil {
-			options = append(options, hqgoerrors.WithField("status", res.Status))
+			msg = fmt.Sprintf("%s, status: %s", msg, res.Status)
 
 			res.Body.Close()
 		}
 
-		err = hqgoerrors.Wrap(err, "giving up", options...)
+		err = fmt.Errorf("%s: %w", msg, err)
 
 		c.closeIdleConnections()
 	}
