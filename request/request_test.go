@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hueristiq/hq-go-http/request"
+	hqgohttprequest "github.com/hueristiq/hq-go-http/request"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,12 +17,12 @@ func TestNew(t *testing.T) {
 	t.Run("ReusableReadCloser", func(t *testing.T) {
 		t.Parallel()
 
-		rr, err := request.NewReusableReadCloser("value body")
+		rr, err := hqgohttprequest.NewReusableReadCloser("value body")
 
 		require.NoError(t, err)
 		require.NotNil(t, rr)
 
-		req, err := request.New("POST", "http://example.com", *rr) //nolint:govet,copylocks
+		req, err := hqgohttprequest.New("POST", "http://example.com", *rr) //nolint:govet,copylocks
 
 		require.NoError(t, err)
 		require.NotNil(t, req)
@@ -45,12 +45,12 @@ func TestNew(t *testing.T) {
 	t.Run("*ReusableReadCloser", func(t *testing.T) {
 		t.Parallel()
 
-		rr, err := request.NewReusableReadCloser("pointer body")
+		rr, err := hqgohttprequest.NewReusableReadCloser("pointer body")
 
 		require.NoError(t, err)
 		require.NotNil(t, rr)
 
-		req, err := request.New("POST", "http://example.com", rr)
+		req, err := hqgohttprequest.New("POST", "http://example.com", rr)
 
 		require.NoError(t, err)
 		require.NotNil(t, req)
@@ -77,7 +77,7 @@ func TestNew(t *testing.T) {
 			return strings.NewReader("function body"), nil
 		}
 
-		req, err := request.New("POST", "http://example.com", bodyFunc)
+		req, err := hqgohttprequest.New("POST", "http://example.com", bodyFunc)
 
 		require.NoError(t, err)
 		require.NotNil(t, req)
@@ -100,7 +100,7 @@ func TestNew(t *testing.T) {
 	t.Run("nil body", func(t *testing.T) {
 		t.Parallel()
 
-		req, err := request.New("GET", "http://example.com", nil)
+		req, err := hqgohttprequest.New("GET", "http://example.com", nil)
 
 		require.NoError(t, err)
 		require.NotNil(t, req)
@@ -113,7 +113,7 @@ func TestNew(t *testing.T) {
 
 		bodyStr := "example body"
 
-		req, err := request.New("POST", "http://example.com", bodyStr)
+		req, err := hqgohttprequest.New("POST", "http://example.com", bodyStr)
 
 		require.NoError(t, err)
 		require.NotNil(t, req)
@@ -144,7 +144,7 @@ func TestNew(t *testing.T) {
 
 		bodyBytes := []byte("byte body")
 
-		req, err := request.New("POST", "http://example.com", bodyBytes)
+		req, err := hqgohttprequest.New("POST", "http://example.com", bodyBytes)
 
 		require.NoError(t, err)
 		require.NotNil(t, req)
@@ -167,7 +167,7 @@ func TestNew(t *testing.T) {
 	t.Run("unsupported body type", func(t *testing.T) {
 		t.Parallel()
 
-		req, err := request.New("POST", "http://example.com", 123)
+		req, err := hqgohttprequest.New("POST", "http://example.com", 123)
 
 		require.Error(t, err)
 		require.Nil(t, req)
@@ -181,7 +181,7 @@ func TestNewWithContext(t *testing.T) {
 
 	ctx := context.WithValue(t.Context(), Key("key"), "value")
 
-	req, err := request.NewWithContext(ctx, "GET", "http://example.com", nil)
+	req, err := hqgohttprequest.NewWithContext(ctx, "GET", "http://example.com", nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, req)

@@ -15,7 +15,7 @@ import (
 	"unsafe"
 
 	hqgohttp "github.com/hueristiq/hq-go-http"
-	"github.com/hueristiq/hq-go-http/status"
+	hqgohttpstatus "github.com/hueristiq/hq-go-http/status"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -103,7 +103,7 @@ func TestDo(t *testing.T) {
 
 	fakeRespBody := "Success"
 	fakeResp := &http.Response{
-		StatusCode: status.OK.Int(),
+		StatusCode: hqgohttpstatus.OK.Int(),
 		Body:       io.NopCloser(strings.NewReader(fakeRespBody)),
 	}
 	fakeRT := RoundTripFunc(func(_ *http.Request) (*http.Response, error) {
@@ -131,7 +131,7 @@ func TestDo(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, status.OK.Int(), res.StatusCode)
+	assert.Equal(t, hqgohttpstatus.OK.Int(), res.StatusCode)
 
 	bodyBytes, err := io.ReadAll(res.Body)
 
@@ -146,7 +146,7 @@ func TestDoFallbackToHTTP2(t *testing.T) {
 
 	fallbackBody := "Fallback Success"
 	fallbackResp := &http.Response{
-		StatusCode: status.OK.Int(),
+		StatusCode: hqgohttpstatus.OK.Int(),
 		Body:       io.NopCloser(strings.NewReader(fallbackBody)),
 	}
 	fakeRT1 := RoundTripFunc(func(_ *http.Request) (res *http.Response, err error) {
@@ -187,7 +187,7 @@ func TestDoFallbackToHTTP2(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, status.OK.Int(), res.StatusCode)
+	assert.Equal(t, hqgohttpstatus.OK.Int(), res.StatusCode)
 
 	bodyBytes, err := io.ReadAll(res.Body)
 
@@ -204,7 +204,7 @@ func TestCloseIdleConnections(t *testing.T) {
 	ft := &fakeTransport{
 		rt: RoundTripFunc(func(_ *http.Request) (res *http.Response, err error) {
 			res = &http.Response{
-				StatusCode: status.OK.Int(),
+				StatusCode: hqgohttpstatus.OK.Int(),
 				Body:       io.NopCloser(strings.NewReader("OK")),
 			}
 
@@ -300,7 +300,7 @@ func TestRequestConfigurationMerging(t *testing.T) {
 		capturedHeaders = req.Header
 
 		res = &http.Response{
-			StatusCode: status.OK.Int(),
+			StatusCode: hqgohttpstatus.OK.Int(),
 			Body:       io.NopCloser(strings.NewReader("merged")),
 		}
 
@@ -370,7 +370,7 @@ func TestConvenienceMethods(t *testing.T) {
 		body := fmt.Sprintf("Method: %s, URL: %s", req.Method, req.URL.String())
 
 		res = &http.Response{
-			StatusCode: status.OK.Int(),
+			StatusCode: hqgohttpstatus.OK.Int(),
 			Body:       io.NopCloser(strings.NewReader(body)),
 		}
 

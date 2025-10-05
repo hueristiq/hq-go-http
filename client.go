@@ -10,11 +10,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/hueristiq/hq-go-http/header"
-	"github.com/hueristiq/hq-go-http/method"
-	"github.com/hueristiq/hq-go-http/request"
+	hqgohttpheader "github.com/hueristiq/hq-go-http/header"
+	hqgohttpmethod "github.com/hueristiq/hq-go-http/method"
+	hqgohttprequest "github.com/hueristiq/hq-go-http/request"
 	hqgoretrier "github.com/hueristiq/hq-go-retrier"
-	"github.com/hueristiq/hq-go-retrier/backoff"
+	hqgoretrierbackoff "github.com/hueristiq/hq-go-retrier/backoff"
 	"golang.org/x/net/http2"
 )
 
@@ -44,7 +44,7 @@ type Client struct {
 // with the retry policy defined in the request configuration.
 //
 // Parameters:
-//   - req (*request.Request): A pointer to a request.Request instance that wraps an *http.Request.
+//   - req (*hqgohttprequest.Request): A pointer to a request.Request instance that wraps an *http.Request.
 //     This wrapper allows the request body to be reusable between retries.
 //   - cfg (*RequestConfiguration): Request-specific configuration overrides including retry settings,
 //     response read limits, and additional parameters.
@@ -52,7 +52,7 @@ type Client struct {
 // Returns:
 //   - res (*http.Response): The HTTP response received upon success.
 //   - err (error): An error if the request ultimately fails after all retry attempts.
-func (c *Client) Do(req *request.Request, cfg *RequestConfiguration) (res *http.Response, err error) {
+func (c *Client) Do(req *hqgohttprequest.Request, cfg *RequestConfiguration) (res *http.Response, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.cfg.Timeout)
 
 	defer cancel()
@@ -141,9 +141,9 @@ func (c *Client) Request(configurations ...*RequestConfiguration) (res *http.Res
 		return
 	}
 
-	var req *request.Request
+	var req *hqgohttprequest.Request
 
-	req, err = request.New(cfg.Method.String(), cfg.URL, cfg.Body)
+	req, err = hqgohttprequest.New(cfg.Method.String(), cfg.URL, cfg.Body)
 	if err != nil {
 		return
 	}
@@ -292,7 +292,7 @@ func (c *Client) getRequestConfiguration(configurations ...*RequestConfiguration
 //   - err (error): An error if the request fails.
 func (c *Client) Get(URL string, configurations ...*RequestConfiguration) (res *http.Response, err error) {
 	configurations = append(configurations, &RequestConfiguration{
-		Method: method.GET,
+		Method: hqgohttpmethod.GET,
 		URL:    URL,
 	})
 
@@ -313,7 +313,7 @@ func (c *Client) Get(URL string, configurations ...*RequestConfiguration) (res *
 //   - err (error): An error if the request fails.
 func (c *Client) Head(URL string, configurations ...*RequestConfiguration) (res *http.Response, err error) {
 	configurations = append(configurations, &RequestConfiguration{
-		Method: method.HEAD,
+		Method: hqgohttpmethod.HEAD,
 		URL:    URL,
 	})
 
@@ -335,7 +335,7 @@ func (c *Client) Head(URL string, configurations ...*RequestConfiguration) (res 
 //   - err (error): An error if the request fails.
 func (c *Client) Put(URL string, body interface{}, configurations ...*RequestConfiguration) (res *http.Response, err error) {
 	configurations = append(configurations, &RequestConfiguration{
-		Method: method.PUT,
+		Method: hqgohttpmethod.PUT,
 		URL:    URL,
 		Body:   body,
 	})
@@ -357,7 +357,7 @@ func (c *Client) Put(URL string, body interface{}, configurations ...*RequestCon
 //   - err (error): An error if the request fails.
 func (c *Client) Delete(URL string, configurations ...*RequestConfiguration) (res *http.Response, err error) {
 	configurations = append(configurations, &RequestConfiguration{
-		Method: method.DELETE,
+		Method: hqgohttpmethod.DELETE,
 		URL:    URL,
 	})
 
@@ -379,7 +379,7 @@ func (c *Client) Delete(URL string, configurations ...*RequestConfiguration) (re
 //   - err (error): An error if the request fails.
 func (c *Client) Post(URL string, body interface{}, configurations ...*RequestConfiguration) (res *http.Response, err error) {
 	configurations = append(configurations, &RequestConfiguration{
-		Method: method.POST,
+		Method: hqgohttpmethod.POST,
 		URL:    URL,
 		Body:   body,
 	})
@@ -401,7 +401,7 @@ func (c *Client) Post(URL string, body interface{}, configurations ...*RequestCo
 //   - err (error): An error if the request fails.
 func (c *Client) Options(URL string, configurations ...*RequestConfiguration) (res *http.Response, err error) {
 	configurations = append(configurations, &RequestConfiguration{
-		Method: method.OPTIONS,
+		Method: hqgohttpmethod.OPTIONS,
 		URL:    URL,
 	})
 
@@ -418,7 +418,7 @@ func (c *Client) Options(URL string, configurations ...*RequestConfiguration) (r
 //   - Client (*http.Client): An optional custom HTTP client to be used. If nil, a default client is used.
 //   - Timeout (time.Duration): The maximum duration allowed for each HTTP request.
 //   - CloseIdleConnections (bool): Determines whether idle connections should be periodically closed.
-//   - Method (method.Method): The default HTTP method to use (e.g., GET, POST) if not overridden.
+//   - Method (hqgohttpmethod.Method): The default HTTP method to use (e.g., GET, POST) if not overridden.
 //   - BaseURL (string): A base URL that is prefixed to all request URLs.
 //   - URL (string): The default URL path that can be combined with BaseURL.
 //   - Params (map[string]string): Default query parameters appended to every request.
@@ -429,24 +429,23 @@ func (c *Client) Options(URL string, configurations ...*RequestConfiguration) (r
 //   - RetryMax (int): The maximum number of retry attempts before giving up.
 //   - RetryWaitMin (time.Duration): The minimum wait time between retries.
 //   - RetryWaitMax (time.Duration): The maximum wait time between retries.
-//   - RetryBackoff (backoff.Backoff): The backoff strategy used to calculate wait times between retries.
+//   - RetryBackoff (hqgoretrierbackoff.Backoff): The backoff strategy used to calculate wait times between retries.
 type ClientConfiguration struct {
 	Client               *http.Client
 	Timeout              time.Duration
 	CloseIdleConnections bool
-
-	Method        method.Method
-	BaseURL       string
-	URL           string
-	Params        map[string]string
-	Headers       []Header
-	Body          interface{}
-	RespReadLimit int64
-	RetryPolicy   RetryPolicy
-	RetryMax      int
-	RetryWaitMin  time.Duration
-	RetryWaitMax  time.Duration
-	RetryBackoff  backoff.Backoff
+	Method               hqgohttpmethod.Method
+	BaseURL              string
+	URL                  string
+	Params               map[string]string
+	Headers              []Header
+	Body                 interface{}
+	RespReadLimit        int64
+	RetryPolicy          RetryPolicy
+	RetryMax             int
+	RetryWaitMin         time.Duration
+	RetryWaitMax         time.Duration
+	RetryBackoff         hqgoretrierbackoff.Backoff
 }
 
 // Configuration ensures that all configuration fields are properly initialized.
@@ -464,7 +463,7 @@ func (c *ClientConfiguration) Configuration() (configuration *ClientConfiguratio
 
 	if configuration.Headers == nil {
 		configuration.Headers = []Header{
-			NewSetHeader(header.UserAgent.String(), "hq-go-http (https://github.com/hueristiq/hq-go-http.git)"),
+			NewSetHeader(hqgohttpheader.UserAgent.String(), "hq-go-http (https://github.com/hueristiq/hq-go-http.git)"),
 		}
 	}
 
@@ -473,7 +472,7 @@ func (c *ClientConfiguration) Configuration() (configuration *ClientConfiguratio
 	}
 
 	if configuration.RetryBackoff == nil {
-		configuration.RetryBackoff = backoff.Exponential()
+		configuration.RetryBackoff = hqgoretrierbackoff.Exponential()
 	}
 
 	return

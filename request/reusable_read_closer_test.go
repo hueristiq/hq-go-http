@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/hueristiq/hq-go-http/request"
+	hqgohttprequest "github.com/hueristiq/hq-go-http/request"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -42,7 +42,7 @@ func TestNewReusableReadCloser(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			reader, err := request.NewReusableReadCloser(tc.input)
+			reader, err := hqgohttprequest.NewReusableReadCloser(tc.input)
 
 			if tc.expectedErr {
 				require.Error(t, err, "Expected an error but got none")
@@ -67,7 +67,7 @@ func TestReusableReadCloser_ReadRepetition(t *testing.T) {
 
 	input := "hello world"
 
-	rrc, err := request.NewReusableReadCloser(input)
+	rrc, err := hqgohttprequest.NewReusableReadCloser(input)
 
 	require.NoError(t, err)
 	require.NotNil(t, rrc)
@@ -94,7 +94,7 @@ func TestReusableReadCloser_ReadRepetition(t *testing.T) {
 func TestReusableReadCloser_EmptyData(t *testing.T) {
 	t.Parallel()
 
-	rrc, err := request.NewReusableReadCloser([]byte{})
+	rrc, err := hqgohttprequest.NewReusableReadCloser([]byte{})
 
 	require.NoError(t, err)
 	require.NotNil(t, rrc)
@@ -113,7 +113,7 @@ func TestReusableReadCloser_PartialRead(t *testing.T) {
 
 	input := "hello world"
 
-	rrc, err := request.NewReusableReadCloser(input)
+	rrc, err := hqgohttprequest.NewReusableReadCloser(input)
 
 	require.NoError(t, err)
 	require.NotNil(t, rrc)
@@ -160,7 +160,7 @@ func TestReusableReadCloser_ConcurrentRead(t *testing.T) {
 
 	input := "concurrent"
 
-	rrc, err := request.NewReusableReadCloser(input)
+	rrc, err := hqgohttprequest.NewReusableReadCloser(input)
 
 	require.NoError(t, err)
 	require.NotNil(t, rrc)
