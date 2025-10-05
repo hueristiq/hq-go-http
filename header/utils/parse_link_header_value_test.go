@@ -1,9 +1,9 @@
-package header_test
+package utils_test
 
 import (
 	"testing"
 
-	"github.com/hueristiq/hq-go-http/header"
+	hqgohttpheaderutils "github.com/hueristiq/hq-go-http/header/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -11,7 +11,7 @@ import (
 func TestLinkString(t *testing.T) {
 	t.Parallel()
 
-	link := header.ParsedLink{
+	link := hqgohttpheaderutils.ParsedLink{
 		URL: "http://example.com",
 		Rel: "next",
 		Parameters: map[string]string{
@@ -32,7 +32,7 @@ func TestLinkString(t *testing.T) {
 func TestLinkString_EmptyRelAndParams(t *testing.T) {
 	t.Parallel()
 
-	link := header.ParsedLink{
+	link := hqgohttpheaderutils.ParsedLink{
 		URL:        "http://example.com",
 		Rel:        "",
 		Parameters: map[string]string{},
@@ -46,7 +46,7 @@ func TestLinkString_EmptyRelAndParams(t *testing.T) {
 func TestLinkHasParameter(t *testing.T) {
 	t.Parallel()
 
-	link := header.ParsedLink{
+	link := hqgohttpheaderutils.ParsedLink{
 		URL: "http://example.com",
 		Parameters: map[string]string{
 			"foo": "bar",
@@ -60,7 +60,7 @@ func TestLinkHasParameter(t *testing.T) {
 func TestLinkParameter(t *testing.T) {
 	t.Parallel()
 
-	link := header.ParsedLink{
+	link := hqgohttpheaderutils.ParsedLink{
 		URL: "http://example.com",
 		Parameters: map[string]string{
 			"foo": "bar",
@@ -74,7 +74,7 @@ func TestLinkParameter(t *testing.T) {
 func TestLinksString(t *testing.T) {
 	t.Parallel()
 
-	links := header.ParsedLinks{
+	links := hqgohttpheaderutils.ParsedLinks{
 		{
 			URL: "http://example.com",
 			Rel: "next",
@@ -106,7 +106,7 @@ func TestLinksString(t *testing.T) {
 func TestLinksFilterByRel(t *testing.T) {
 	t.Parallel()
 
-	links := header.ParsedLinks{
+	links := hqgohttpheaderutils.ParsedLinks{
 		{
 			URL: "http://example.com/next",
 			Rel: "next",
@@ -130,20 +130,20 @@ func TestLinksFilterByRel(t *testing.T) {
 	}
 }
 
-func TestParseLinkHeader_Empty(t *testing.T) {
+func TestParseLinkHeaderValue_Empty(t *testing.T) {
 	t.Parallel()
 
-	links := header.ParseLinkHeader("")
+	links := hqgohttpheaderutils.ParseLinkHeaderValue("")
 
 	assert.Empty(t, links)
 }
 
-func TestParseLinkHeader_Single(t *testing.T) {
+func TestParseLinkHeaderValue_Single(t *testing.T) {
 	t.Parallel()
 
 	raw := `<http://example.com>; rel="next"; foo="bar"`
 
-	links := header.ParseLinkHeader(raw)
+	links := hqgohttpheaderutils.ParseLinkHeaderValue(raw)
 
 	require.Len(t, links, 1)
 
@@ -154,12 +154,12 @@ func TestParseLinkHeader_Single(t *testing.T) {
 	assert.Equal(t, "bar", link.Parameters["foo"])
 }
 
-func TestParseLinkHeader_Multiple(t *testing.T) {
+func TestParseLinkHeaderValue_Multiple(t *testing.T) {
 	t.Parallel()
 
 	raw := `<http://example.com>; rel="next"; foo="bar", <http://example.org>; rel="prev"; baz="qux"`
 
-	links := header.ParseLinkHeader(raw)
+	links := hqgohttpheaderutils.ParseLinkHeaderValue(raw)
 
 	require.Len(t, links, 2)
 
@@ -176,7 +176,7 @@ func TestParseLinkHeader_Multiple(t *testing.T) {
 	assert.Equal(t, "qux", link2.Parameters["baz"])
 }
 
-func TestParseLinkHeaders(t *testing.T) {
+func TestParseLinkHeaderValues(t *testing.T) {
 	t.Parallel()
 
 	headers := []string{
@@ -184,7 +184,7 @@ func TestParseLinkHeaders(t *testing.T) {
 		`<http://example.org>; rel="prev"; baz="qux"`,
 	}
 
-	links := header.ParseLinkHeaders(headers)
+	links := hqgohttpheaderutils.ParseLinkHeaderValues(headers)
 
 	require.Len(t, links, 2)
 

@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/hueristiq/hq-go-url/parser"
+	hqgohttpurlparser "github.com/hueristiq/hq-go-url/parser"
 )
 
 // Request is a wrapper around http.Request that enables the request body to be reusable.
@@ -99,7 +99,7 @@ func NewFromURL(method, URL string, body interface{}) (req *Request, err error) 
 //   - req (*Request): A pointer to the newly created Request wrapper containing an http.Request.
 //   - err (error): An error value if the request creation fails (for example, due to an unsupported body type).
 func NewFromURLWithContext(ctx context.Context, method, URL string, body interface{}) (req *Request, err error) {
-	parsedURL, err := parser.New(parser.WithDefaultScheme("http")).Parse(URL)
+	parsedURL, err := hqgohttpurlparser.New(hqgohttpurlparser.WithDefaultScheme("http")).Parse(URL)
 	if err != nil {
 		return
 	}

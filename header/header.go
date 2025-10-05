@@ -3,17 +3,23 @@ package header
 // Header represents an HTTP header field as defined by IANA.
 //
 // The underlying type is string, which allows seamless conversion and integration
-// with other string-based operations. Using a custom type like Header helps to ensure
-// that only valid and predefined HTTP header names are used throughout the codebase.
+// with other string-based operations, such as HTTP request/response handling in
+// standard libraries (e.g., net/http). Using a custom type like Header ensures
+// type safety, improves code readability, and minimizes errors from invalid or
+// mistyped header names. This type is intended to be used in contexts where HTTP
+// headers are set, retrieved, or manipulated, such as in HTTP servers, clients,
+// or middleware.
 type Header string
 
 // String converts the Header to its underlying string representation.
 //
-// This method is used to retrieve the actual header name as a string, which is useful
-// when interacting with other parts of an HTTP framework or when outputting header values.
+// This method facilitates interoperability with APIs or libraries that expect
+// header names as strings, such as the net/http package. It is safe to call
+// on any Header value, including uninitialized or zero values, as it simply
+// performs a type conversion to string.
 //
 // Returns:
-//   - header (string): The HTTP header field as a string.
+//   - header (string): The HTTP header field name as a string.
 func (h Header) String() (header string) {
 	header = string(h)
 
@@ -22,11 +28,19 @@ func (h Header) String() (header string) {
 
 // Predefined HTTP header constants.
 //
-// The constants below represent commonly used HTTP header fields as defined by IANA.
-// They are declared as type Header to ensure type safety and to minimize the possibility
-// of typos when using header names throughout the code.
+// The constants below represent commonly used HTTP header fields as defined by
+// IANA (Internet Assigned Numbers Authority) and other relevant RFCs (e.g., RFC
+// 7231, RFC 7540). They are declared as type Header to enforce type safety and
+// prevent typographical errors in header names. Using these constants improves
+// code clarity, maintainability, and consistency across a codebase.
 //
-// These constants can be referenced directly to improve code clarity and maintainability.
+// These headers cover a wide range of use cases, including:
+//   - CORS (Cross-Origin Resource Sharing): Headers like Access-Control-Allow-Origin.
+//   - Caching: Headers like Cache-Control, ETag, and Expires.
+//   - Security: Headers like Strict-Transport-Security and Content-Security-Policy.
+//   - Content negotiation: Headers like Accept, Accept-Encoding, and Content-Type.
+//   - Connection management: Headers like Connection and Keep-Alive.
+//   - Custom and deprecated headers: Headers like X-Frame-Options and X-Powered-By.
 const (
 	AccessControlAllowCredentials   Header = "Access-Control-Allow-Credentials"
 	AccessControlAllowHeaders       Header = "Access-Control-Allow-Headers"
