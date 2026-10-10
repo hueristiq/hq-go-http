@@ -7,9 +7,10 @@ import (
 	"sync"
 	"testing"
 
-	hqgohttprequest "github.com/hueristiq/hq-go-http/request"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	hqgohttprequest "github.com/hueristiq/hq-go-http/request"
 )
 
 func TestNewReusableReadCloser(t *testing.T) {

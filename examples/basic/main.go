@@ -1,25 +1,32 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http/httputil"
 
 	hqgohttp "github.com/hueristiq/hq-go-http"
 	"github.com/hueristiq/hq-go-http/header"
+	"github.com/hueristiq/hq-go-http/method"
 )
 
 func main() {
-	client := hqgohttp.DefaultClient
-
-	res, err := client.Get("https://google.com", &hqgohttp.RequestConfiguration{
-		Headers: []hqgohttp.Header{
-			hqgohttp.NewSetHeader(header.UserAgent.String(), "test"),
-		},
-	})
+	client, err := hqgohttp.NewClient()
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	res, err := client.NewRequest().
+		Method(method.GET).
+		URL("https://google.com").
+		SetHeader(header.UserAgent.String(), "test").
+		Do(context.Background())
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	defer res.Body.Close()
 
 	rawReq, err := httputil.DumpRequestOut(res.Request, true)
 	if err != nil {
