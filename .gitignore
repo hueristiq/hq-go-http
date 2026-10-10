@@ -1,2 +1,5 @@
-# IDE Stuff
+# Binaries
+.bin
+
+# IDE stuff
 .vscode

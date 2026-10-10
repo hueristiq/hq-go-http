@@ -1,6 +1,6 @@
 module github.com/hueristiq/hq-go-http
 
-go 1.25.0
+go 1.26.3
 
 require (
 	github.com/hueristiq/hq-go-retrier v0.0.0-20251117025327-cc4f0c41a7ed
