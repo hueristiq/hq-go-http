@@ -1,23 +1,14 @@
-// Package method provides a strongly typed representation of HTTP methods as defined by IANA.
-// The package introduces a custom type, Method, which is an alias for string, to ensure
-// compile-time type safety when working with HTTP methods. This design helps prevent common errors,
-// such as typos, and guarantees that only valid HTTP methods are used throughout your code.
+// Package method provides a strongly typed representation of HTTP methods as
+// defined by IANA.
 //
-// # Usage Example
+// It suits code that constructs or compares HTTP methods, where a plain string
+// invites typos that compile fine and fail at runtime.
 //
-//	package main
+// # Entry points
 //
-//	import (
-//	    "fmt"
-//	    hqgohttpmethod "github.com/hueristiq/hq-go-http/method"
-//	)
+// The [Method] type is a string alias with a String method, and the package
+// constants cover the standard methods: GET, HEAD, POST, PUT, PATCH, DELETE,
+// OPTIONS, CONNECT, and TRACE.
 //
-//	func main() {
-//	    m := hqgohttpmethod.GET
-//	    fmt.Println("HTTP Method:", m.String()) // Output: "GET"
-//	}
-//
-// Reference:
-//
-//	https://www.iana.org/assignments/http-methods/http-methods.xhtml
+// The implementation relies on the Go standard library only.
 package method

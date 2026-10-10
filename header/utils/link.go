@@ -6,38 +6,40 @@ import (
 	"strings"
 )
 
-// ParsedLink represents a single link parsed from an HTTP Link header, as defined by RFC 8288.
+// Link is a single link parsed from an HTTP Link header, as defined by RFC 8288.
 //
-// It encapsulates the target URL, the relation type ("rel"), and any additional parameters
-// associated with the link. The structure is designed to facilitate easy access to link
-// components and to support formatting back into a valid Link header string. The Parameters
-// map stores keys in lowercase for consistent access, regardless of the case used in the input.
+// It encapsulates the target URL, the relation type ("rel"), and any additional
+// parameters associated with the link. The structure is designed to facilitate
+// easy access to link components and to support formatting back into a valid
+// Link header string.
 //
 // Fields:
 //   - URL (string): The target URI for the link (e.g., "https://api.example.com/page/2").
 //   - Rel (string): The link relation type (e.g., "next", "prev", "author").
-//   - Parameters (map[string]string): A map of additional key/value pairs associated with the link,
-//     where keys are stored in lowercase for consistent access (e.g., {"title": "Next Page"}).
-type ParsedLink struct {
-	URL        string
-	Rel        string
-	Parameters map[string]string
+//   - Params (map[string]string): A map of additional key/value pairs associated with
+//     the link, with keys kept exactly as written in the header (e.g.,
+//     {"title": "Next Page"}).
+type Link struct {
+	URL    string
+	Rel    string
+	Params map[string]string
 }
 
-// String returns a string representation of the ParsedLink in the format specified by RFC 8288:
+// String returns a string representation of the Link in the format specified by RFC 8288:
 //
 //	<URL>; key1="value1"; key2="value2"; rel="relation"
 //
-// The URL is enclosed in angle brackets (`<` and `>`), followed by semicolon-separated parameters.
-// If the Rel field is non-empty, it is appended as a `rel="value"` parameter. The method ensures
-// proper quoting of parameter values to comply with HTTP Link header syntax.
+// The URL is enclosed in angle brackets (`<` and `>`), followed by semicolon-separated
+// parameters. If the Rel field is non-empty, it is appended as a `rel="value"`
+// parameter. The method ensures proper quoting of parameter values to comply with
+// HTTP Link header syntax.
 //
 // Returns:
-//   - link (string): A formatted string representation of the ParsedLink.
-func (l ParsedLink) String() (link string) {
-	params := make([]string, 0, len(l.Parameters)+1)
+//   - link (string): A formatted string representation of the Link.
+func (l Link) String() (link string) {
+	params := make([]string, 0, len(l.Params)+1)
 
-	for k, v := range l.Parameters {
+	for k, v := range l.Params {
 		params = append(params, fmt.Sprintf("%s=%q", k, v))
 	}
 
@@ -50,56 +52,58 @@ func (l ParsedLink) String() (link string) {
 	return
 }
 
-// HasParameter checks whether the ParsedLink contains a parameter with the specified key.
+// HasParam checks whether the Link contains a parameter with the specified key.
 //
-// The key is case-sensitive, as the Parameters map stores keys in lowercase (as enforced
-// during parsing). This method is useful for checking the presence of specific parameters,
-// such as "title" or "type", before attempting to retrieve their values.
+// The key is case-sensitive, matching the key exactly as written in the header.
+// This method is useful for checking the presence of specific parameters, such
+// as "title" or "type", before attempting to retrieve their values.
 //
 // Parameters:
 //   - key (string): The parameter name to check for.
 //
 // Returns:
-//   - hasParameter (bool): True if the parameter exists, false otherwise.
-func (l ParsedLink) HasParameter(key string) (hasParameter bool) {
-	_, hasParameter = l.Parameters[key]
+//   - hasParam (bool): True if the parameter exists, false otherwise.
+func (l Link) HasParam(key string) (hasParam bool) {
+	_, hasParam = l.Params[key]
 
 	return
 }
 
-// Parameter retrieves the value of the parameter identified by the provided key.
+// Param retrieves the value of the parameter identified by the provided key.
 //
-// If the parameter does not exist, an empty string is returned. The key is case-sensitive,
-// as the Parameters map stores keys in lowercase. This method provides a safe way to access
-// parameter values without directly interacting with the Parameters map.
+// If the parameter does not exist, an empty string is returned. The key is
+// case-sensitive, matching the key exactly as written in the header. This method
+// provides a safe way to access parameter values without directly interacting
+// with the Params map.
 //
 // Parameters:
 //   - key (string): The parameter name to retrieve.
 //
 // Returns:
-//   - parameter (string): The value of the parameter, or an empty string if not found.
-func (l ParsedLink) Parameter(key string) (parameter string) {
-	parameter = l.Parameters[key]
+//   - param (string): The value of the parameter, or an empty string if not found.
+func (l Link) Param(key string) (param string) {
+	param = l.Params[key]
 
 	return
 }
 
-// ParsedLinks is a slice of ParsedLink objects, representing a collection of links.
+// Links is a slice of Link objects, representing a collection of links.
 //
-// This type is used to store multiple links parsed from one or more HTTP Link headers,
-// such as those used in pagination or hypermedia APIs. It provides methods for formatting
-// the collection as a string and filtering links by their relation type.
-type ParsedLinks []ParsedLink
+// This type is used to store multiple links parsed from one or more HTTP Link
+// headers, such as those used in pagination or hypermedia APIs. It provides
+// methods for formatting the collection as a string and filtering links by their
+// relation type.
+type Links []Link
 
-// String returns a single string representation of the ParsedLinks collection.
+// String returns a single string representation of the Links collection.
 //
-// Each ParsedLink is formatted using its String method, and the resulting strings are
-// joined with a comma and a space (", ") to conform to the HTTP Link header format.
-// If the slice is empty, an empty string is returned.
+// Each Link is formatted using its String method, and the resulting strings are
+// joined with a comma and a space (", ") to conform to the HTTP Link header
+// format. If the slice is empty, an empty string is returned.
 //
 // Returns:
 //   - links (string): A comma-separated string of all link representations.
-func (l ParsedLinks) String() (links string) {
+func (l Links) String() (links string) {
 	if len(l) == 0 {
 		return
 	}
@@ -115,20 +119,20 @@ func (l ParsedLinks) String() (links string) {
 	return
 }
 
-// FilterByRel returns a new ParsedLinks collection containing only the ParsedLink objects
+// FilterByRel returns a new Links collection containing only the Link objects
 // with a Rel value matching the provided rel argument.
 //
-// The comparison is case-sensitive, as relation types are typically case-sensitive per RFC 8288.
-// This method is useful for extracting links with specific relation types, such as "next" or "prev"
-// for pagination, from a larger collection.
+// The comparison is case-sensitive, as relation types are typically case-sensitive
+// per RFC 8288. This method is useful for extracting links with specific relation
+// types, such as "next" or "prev" for pagination, from a larger collection.
 //
 // Parameters:
 //   - rel (string): The relation type to filter by (case-sensitive).
 //
 // Returns:
-//   - links (ParsedLinks): A new ParsedLinks slice containing only links with a matching Rel value.
-func (l ParsedLinks) FilterByRel(rel string) (links ParsedLinks) {
-	links = make(ParsedLinks, 0, len(l))
+//   - links (Links): A new Links slice containing only links with a matching Rel value.
+func (l Links) FilterByRel(rel string) (links Links) {
+	links = make(Links, 0, len(l))
 
 	for _, link := range l {
 		if link.Rel == rel {
@@ -139,37 +143,37 @@ func (l ParsedLinks) FilterByRel(rel string) (links ParsedLinks) {
 	return
 }
 
-// ParseLinkHeaderValue parses a raw HTTP Link header string into a ParsedLinks collection.
+// Parse parses a raw HTTP Link header string into a Links collection.
 //
-// The input string may contain one or more comma-separated link entries, each in the format:
-// `<URL>; param1="value1"; param2="value2"`. The function splits the input into individual
-// links, extracts the URL (enclosed in angle brackets), and parses parameters, including the
-// "rel" attribute. Parameters are stored in a case-insensitive manner (keys are converted to
-// lowercase). If the input is empty or contains only invalid entries, an empty ParsedLinks slice
-// is returned.
+// The input string may contain one or more comma-separated link entries, each in
+// the format: `<URL>; param1="value1"; param2="value2"`. The function splits the
+// input into individual links, extracts the URL (enclosed in angle brackets), and
+// parses parameters, including the "rel" attribute (matched case-insensitively).
+// Parameter keys are kept exactly as written. If the input is empty or contains
+// only invalid entries, an empty Links slice is returned.
 //
 // Parameters:
-//   - value (string): The raw HTTP Link header string to parse.
+//   - raw (string): The raw HTTP Link header string to parse.
 //
 // Returns:
-//   - links (ParsedLinks): A slice of ParsedLink objects representing the parsed links.
-func ParseLinkHeaderValue(value string) (links ParsedLinks) {
-	if value == "" {
+//   - links (Links): A slice of Link objects representing the parsed links.
+func Parse(raw string) (links Links) {
+	if raw == "" {
 		return
 	}
 
-	value = strings.TrimSpace(value)
+	raw = strings.TrimSpace(raw)
 
-	for _, chunk := range strings.Split(value, ",") {
+	for _, chunk := range strings.Split(raw, ",") {
 		chunk = strings.TrimSpace(chunk)
 		if chunk == "" {
 			continue
 		}
 
-		link := ParsedLink{
-			URL:        "",
-			Rel:        "",
-			Parameters: make(map[string]string),
+		link := Link{
+			URL:    "",
+			Rel:    "",
+			Params: make(map[string]string),
 		}
 
 		for _, piece := range strings.Split(chunk, ";") {
@@ -196,7 +200,7 @@ func ParseLinkHeaderValue(value string) (links ParsedLinks) {
 			if strings.EqualFold(key, "rel") {
 				link.Rel = val
 			} else {
-				link.Parameters[strings.ToLower(key)] = val
+				link.Params[key] = val
 			}
 		}
 
@@ -208,22 +212,25 @@ func ParseLinkHeaderValue(value string) (links ParsedLinks) {
 	return
 }
 
-// ParseLinkHeaderValues processes multiple raw HTTP Link header strings and returns a combined ParsedLinks collection.
+// ParseMultiple is like Parse, but accepts a slice of header values rather
+// than just one header string.
 //
-// This function is useful when Link headers are spread across multiple header lines, as allowed by
-// HTTP specifications (e.g., multiple "Link" headers in an HTTP response). It parses each header
-// string using ParseLinkHeader and combines the results into a single ParsedLinks slice.
+// This function is useful when Link headers are spread across multiple header
+// lines, as allowed by HTTP specifications (e.g., multiple "Link" headers in an
+// HTTP response). It parses each header string using Parse and combines the
+// results into a single Links slice.
 //
 // Parameters:
-//   - headers ([]string): A slice of raw HTTP Link header strings, each potentially containing multiple links.
+//   - headers ([]string): A slice of raw HTTP Link header strings, each
+//     potentially containing multiple links.
 //
 // Returns:
-//   - links (ParsedLinks): A combined ParsedLinks slice containing all parsed ParsedLink objects.
-func ParseLinkHeaderValues(headers []string) (links ParsedLinks) {
-	links = make(ParsedLinks, 0)
+//   - links (Links): A combined Links slice containing all parsed Link objects.
+func ParseMultiple(headers []string) (links Links) {
+	links = make(Links, 0, len(headers))
 
 	for _, header := range headers {
-		links = append(links, ParseLinkHeaderValue(header)...)
+		links = append(links, Parse(header)...)
 	}
 
 	return
@@ -231,12 +238,14 @@ func ParseLinkHeaderValues(headers []string) (links ParsedLinks) {
 
 // parseParameter parses a raw parameter string in the format "key=value".
 //
-// It extracts the key and value, removing surrounding double quotes from the value if present.
-// The function is unexported, as it is an internal helper used by ParseLinkHeader. It handles
-// malformed input by returning an error for empty or improperly formatted parameters.
+// It extracts the key and value, removing surrounding double quotes from the
+// value if present. The function is unexported, as it is an internal helper used
+// by Parse. It handles malformed input by returning an error for empty or
+// improperly formatted parameters.
 //
 // Parameters:
-//   - raw (string): The raw parameter string to parse (e.g., `rel="next"`, `title="Next Page"`).
+//   - raw (string): The raw parameter string to parse (e.g., `rel="next"`,
+//     `title="Next Page"`).
 //
 // Returns:
 //   - key (string): The parsed parameter name.

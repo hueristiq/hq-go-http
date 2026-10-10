@@ -3,18 +3,19 @@ package utils_test
 import (
 	"testing"
 
-	hqgohttpheaderutils "github.com/hueristiq/hq-go-http/header/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	hqgohttpheaderutils "github.com/hueristiq/hq-go-http/header/utils"
 )
 
-func TestLinkString(t *testing.T) {
+func TestLink_String(t *testing.T) {
 	t.Parallel()
 
-	link := hqgohttpheaderutils.ParsedLink{
+	link := hqgohttpheaderutils.Link{
 		URL: "http://example.com",
 		Rel: "next",
-		Parameters: map[string]string{
+		Params: map[string]string{
 			"foo": "bar",
 			"baz": "qux",
 		},
@@ -29,13 +30,13 @@ func TestLinkString(t *testing.T) {
 	assert.Contains(t, str, "; ")
 }
 
-func TestLinkString_EmptyRelAndParams(t *testing.T) {
+func TestLink_String_EmptyRelAndParams(t *testing.T) {
 	t.Parallel()
 
-	link := hqgohttpheaderutils.ParsedLink{
-		URL:        "http://example.com",
-		Rel:        "",
-		Parameters: map[string]string{},
+	link := hqgohttpheaderutils.Link{
+		URL:    "http://example.com",
+		Rel:    "",
+		Params: map[string]string{},
 	}
 
 	str := link.String()
@@ -43,49 +44,49 @@ func TestLinkString_EmptyRelAndParams(t *testing.T) {
 	assert.Equal(t, "<http://example.com>; ", str)
 }
 
-func TestLinkHasParameter(t *testing.T) {
+func TestLink_HasParam(t *testing.T) {
 	t.Parallel()
 
-	link := hqgohttpheaderutils.ParsedLink{
+	link := hqgohttpheaderutils.Link{
 		URL: "http://example.com",
-		Parameters: map[string]string{
+		Params: map[string]string{
 			"foo": "bar",
 		},
 	}
 
-	assert.True(t, link.HasParameter("foo"))
-	assert.False(t, link.HasParameter("baz"))
+	assert.True(t, link.HasParam("foo"))
+	assert.False(t, link.HasParam("baz"))
 }
 
-func TestLinkParameter(t *testing.T) {
+func TestLink_Param(t *testing.T) {
 	t.Parallel()
 
-	link := hqgohttpheaderutils.ParsedLink{
+	link := hqgohttpheaderutils.Link{
 		URL: "http://example.com",
-		Parameters: map[string]string{
+		Params: map[string]string{
 			"foo": "bar",
 		},
 	}
 
-	assert.Equal(t, "bar", link.Parameter("foo"))
-	assert.Empty(t, link.Parameter("baz"))
+	assert.Equal(t, "bar", link.Param("foo"))
+	assert.Empty(t, link.Param("baz"))
 }
 
-func TestLinksString(t *testing.T) {
+func TestLinks_String(t *testing.T) {
 	t.Parallel()
 
-	links := hqgohttpheaderutils.ParsedLinks{
+	links := hqgohttpheaderutils.Links{
 		{
 			URL: "http://example.com",
 			Rel: "next",
-			Parameters: map[string]string{
+			Params: map[string]string{
 				"foo": "bar",
 			},
 		},
 		{
 			URL: "http://example.org",
 			Rel: "prev",
-			Parameters: map[string]string{
+			Params: map[string]string{
 				"baz": "qux",
 			},
 		},
@@ -102,11 +103,18 @@ func TestLinksString(t *testing.T) {
 	assert.Contains(t, str, ", ")
 }
 
-// TestLinksFilterByRel verifies that FilterByRel returns only the Links with the specified rel attribute.
-func TestLinksFilterByRel(t *testing.T) {
+func TestLinks_String_Empty(t *testing.T) {
 	t.Parallel()
 
-	links := hqgohttpheaderutils.ParsedLinks{
+	var links hqgohttpheaderutils.Links
+
+	assert.Empty(t, links.String())
+}
+
+func TestLinks_FilterByRel(t *testing.T) {
+	t.Parallel()
+
+	links := hqgohttpheaderutils.Links{
 		{
 			URL: "http://example.com/next",
 			Rel: "next",
@@ -130,53 +138,136 @@ func TestLinksFilterByRel(t *testing.T) {
 	}
 }
 
-func TestParseLinkHeaderValue_Empty(t *testing.T) {
+func TestParse(t *testing.T) {
 	t.Parallel()
 
-	links := hqgohttpheaderutils.ParseLinkHeaderValue("")
+	tests := []struct {
+		name     string
+		raw      string
+		expected hqgohttpheaderutils.Links
+	}{
+		{
+			name:     "empty",
+			raw:      "",
+			expected: nil,
+		},
+		{
+			name: "single link",
+			raw:  `<http://example.com>; rel="next"; foo="bar"`,
+			expected: hqgohttpheaderutils.Links{
+				{
+					URL:    "http://example.com",
+					Rel:    "next",
+					Params: map[string]string{"foo": "bar"},
+				},
+			},
+		},
+		{
+			name: "multiple links",
+			raw:  `<http://example.com>; rel="next"; foo="bar", <http://example.org>; rel="prev"; baz="qux"`,
+			expected: hqgohttpheaderutils.Links{
+				{
+					URL:    "http://example.com",
+					Rel:    "next",
+					Params: map[string]string{"foo": "bar"},
+				},
+				{
+					URL:    "http://example.org",
+					Rel:    "prev",
+					Params: map[string]string{"baz": "qux"},
+				},
+			},
+		},
+		{
+			name: "unquoted values",
+			raw:  `<http://example.com>; rel=next; type=text/html`,
+			expected: hqgohttpheaderutils.Links{
+				{
+					URL:    "http://example.com",
+					Rel:    "next",
+					Params: map[string]string{"type": "text/html"},
+				},
+			},
+		},
+		{
+			name: "rel key is matched case-insensitively",
+			raw:  `<http://example.com>; REL="next"`,
+			expected: hqgohttpheaderutils.Links{
+				{
+					URL:    "http://example.com",
+					Rel:    "next",
+					Params: map[string]string{},
+				},
+			},
+		},
+		{
+			name: "parameter keys are kept as written",
+			raw:  `<http://example.com>; rel="next"; Title="Next Page"`,
+			expected: hqgohttpheaderutils.Links{
+				{
+					URL:    "http://example.com",
+					Rel:    "next",
+					Params: map[string]string{"Title": "Next Page"},
+				},
+			},
+		},
+		{
+			name: "parameter without value",
+			raw:  `<http://example.com>; rel="next"; hreflang`,
+			expected: hqgohttpheaderutils.Links{
+				{
+					URL:    "http://example.com",
+					Rel:    "next",
+					Params: map[string]string{"hreflang": ""},
+				},
+			},
+		},
+		{
+			name: "whitespace around separators",
+			raw:  "  <http://example.com>  ;  rel=\"next\"  ,  <http://example.org>  ;  rel=\"prev\"  ",
+			expected: hqgohttpheaderutils.Links{
+				{
+					URL:    "http://example.com",
+					Rel:    "next",
+					Params: map[string]string{},
+				},
+				{
+					URL:    "http://example.org",
+					Rel:    "prev",
+					Params: map[string]string{},
+				},
+			},
+		},
+		{
+			name: "entries without a URL are skipped",
+			raw:  `rel="next", <http://example.com>; rel="next"`,
+			expected: hqgohttpheaderutils.Links{
+				{
+					URL:    "http://example.com",
+					Rel:    "next",
+					Params: map[string]string{},
+				},
+			},
+		},
+		{
+			name:     "only invalid entries",
+			raw:      `rel="next"`,
+			expected: nil,
+		},
+	}
 
-	assert.Empty(t, links)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			links := hqgohttpheaderutils.Parse(tt.raw)
+
+			assert.Equal(t, tt.expected, links)
+		})
+	}
 }
 
-func TestParseLinkHeaderValue_Single(t *testing.T) {
-	t.Parallel()
-
-	raw := `<http://example.com>; rel="next"; foo="bar"`
-
-	links := hqgohttpheaderutils.ParseLinkHeaderValue(raw)
-
-	require.Len(t, links, 1)
-
-	link := links[0]
-
-	assert.Equal(t, "http://example.com", link.URL)
-	assert.Equal(t, "next", link.Rel)
-	assert.Equal(t, "bar", link.Parameters["foo"])
-}
-
-func TestParseLinkHeaderValue_Multiple(t *testing.T) {
-	t.Parallel()
-
-	raw := `<http://example.com>; rel="next"; foo="bar", <http://example.org>; rel="prev"; baz="qux"`
-
-	links := hqgohttpheaderutils.ParseLinkHeaderValue(raw)
-
-	require.Len(t, links, 2)
-
-	link1 := links[0]
-
-	assert.Equal(t, "http://example.com", link1.URL)
-	assert.Equal(t, "next", link1.Rel)
-	assert.Equal(t, "bar", link1.Parameters["foo"])
-
-	link2 := links[1]
-
-	assert.Equal(t, "http://example.org", link2.URL)
-	assert.Equal(t, "prev", link2.Rel)
-	assert.Equal(t, "qux", link2.Parameters["baz"])
-}
-
-func TestParseLinkHeaderValues(t *testing.T) {
+func TestParseMultiple(t *testing.T) {
 	t.Parallel()
 
 	headers := []string{
@@ -184,14 +275,14 @@ func TestParseLinkHeaderValues(t *testing.T) {
 		`<http://example.org>; rel="prev"; baz="qux"`,
 	}
 
-	links := hqgohttpheaderutils.ParseLinkHeaderValues(headers)
+	links := hqgohttpheaderutils.ParseMultiple(headers)
 
 	require.Len(t, links, 2)
 
 	assert.Equal(t, "http://example.com", links[0].URL)
 	assert.Equal(t, "next", links[0].Rel)
-	assert.Equal(t, "bar", links[0].Parameters["foo"])
+	assert.Equal(t, "bar", links[0].Params["foo"])
 	assert.Equal(t, "http://example.org", links[1].URL)
 	assert.Equal(t, "prev", links[1].Rel)
-	assert.Equal(t, "qux", links[1].Parameters["baz"])
+	assert.Equal(t, "qux", links[1].Params["baz"])
 }

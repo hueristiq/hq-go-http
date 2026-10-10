@@ -3,8 +3,9 @@ package utils_test
 import (
 	"testing"
 
-	hqgohttpheaderutils "github.com/hueristiq/hq-go-http/header/utils"
 	"github.com/stretchr/testify/assert"
+
+	hqgohttpheaderutils "github.com/hueristiq/hq-go-http/header/utils"
 )
 
 func TestCanonicalizeHeaderKey(t *testing.T) {

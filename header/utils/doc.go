@@ -1,38 +1,22 @@
 // Package utils provides utility functions and types for processing HTTP-related data.
 //
-// The package is designed to be lightweight and reusable in applications that handle HTTP
-// headers, such as web servers, clients, or middleware built with packages like net/http.
-// It includes functionality to:
-//   - Canonicalize HTTP header keys to their standard form (e.g., "content-type" to "Content-Type"),
-//     as recommended by RFC 7231 and RFC 9110.
-//   - Parse HTTP Link headers into structured ParsedLink and ParsedLinks types, as defined by RFC 8288,
-//     to support use cases like pagination, resource preloading, or hypermedia APIs.
+// It suits applications that handle HTTP headers — clients, servers, middleware —
+// where a header key must be rendered in its canonical form or an RFC 8288 Link
+// header must be taken apart, for pagination, resource preloading, or hypermedia
+// APIs.
 //
-// Usage Example:
+// # Entry points
 //
-//	package main
+// [CanonicalizeHeaderKey] converts a header key to its canonical form (e.g.,
+// "content-type" to "Content-Type"), as recommended by RFC 9110.
 //
-//	import (
-//	    "fmt"
-//	    hqgohttpheaderutils "github.com/hueristiq/hq-go-http/header/utils"
-//	)
+// [Parse] parses a raw Link header into a [Links] collection of [Link] values —
+// target URL, relation type, and parameters — and [ParseMultiple] merges several
+// Link header lines into one collection. The parsing semantics follow
+// github.com/tomnomnom/linkheader: parameter keys are kept exactly as written,
+// and the "rel" attribute is matched case-insensitively. Note the shared
+// limitation: quoted parameter values containing a comma or a semicolon are not
+// split correctly.
 //
-//	func main() {
-//	    // Canonicalize a header key
-//	    key := "content-type"
-//	    canonical := hqgohttpheaderutils.CanonicalizeHeaderKey(key)
-//	    fmt.Println("Canonicalized:", canonical) // Output: Canonicalized: Content-Type
-//
-//	    // Parse a Link header
-//	    header := `<https://api.example.com/page/2>; rel="next"; title="Next Page"`
-//	    links := hqgohttpheaderutils.ParseLinkHeader(header)
-//	    fmt.Println("Parsed Links:", links.String())
-//	    // Output: Parsed Links: <https://api.example.com/page/2>; title="Next Page"; rel="next"
-//	}
-//
-// References:
-//   - RFC 7231: HTTP/1.1 Semantics and Content (https://tools.ietf.org/html/rfc7231)
-//   - RFC 9110: HTTP Semantics (https://tools.ietf.org/html/rfc9110)
-//   - RFC 8288: Web Linking (https://tools.ietf.org/html/rfc8288)
-//   - IANA Link Relations: https://www.iana.org/assignments/link-relations/link-relations.xhtml
+// The implementation relies on the Go standard library only.
 package utils
