@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	hqgohttpheaderutils "github.com/hueristiq/hq-go-http/header/utils"
+	hqgohttpheaderutils "github.com/hueristiq/hq-lib-http-go/header/utils"
 )
 
 func TestCanonicalizeHeaderKey(t *testing.T) {

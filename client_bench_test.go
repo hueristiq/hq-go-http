@@ -6,10 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	hqgohttp "github.com/hueristiq/hq-go-http"
-	hqgohttpmethod "github.com/hueristiq/hq-go-http/method"
-	hqgohttprequest "github.com/hueristiq/hq-go-http/request"
-	hqgohttpstatus "github.com/hueristiq/hq-go-http/status"
+	hqgohttp "github.com/hueristiq/hq-lib-http-go"
+	hqgohttpmethod "github.com/hueristiq/hq-lib-http-go/method"
+	hqgohttprequest "github.com/hueristiq/hq-lib-http-go/request"
+	hqgohttpstatus "github.com/hueristiq/hq-lib-http-go/status"
 )
 
 // responseSink and errSink keep benchmark results alive so the compiler

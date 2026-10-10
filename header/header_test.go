@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	hqgohttpheader "github.com/hueristiq/hq-go-http/header"
+	hqgohttpheader "github.com/hueristiq/hq-lib-http-go/header"
 )
 
 func TestHeader_String(t *testing.T) {

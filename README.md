@@ -1,8 +1,8 @@
-# hq-go-http
+# hq-lib-http-go
 
-![made with go](https://img.shields.io/badge/made%20with-Go-1E90FF.svg) [![go reference](https://pkg.go.dev/badge/github.com/hueristiq/hq-go-http.svg)](https://pkg.go.dev/github.com/hueristiq/hq-go-http) [![license](https://img.shields.io/badge/license-MIT-gray.svg?color=1E90FF)](https://github.com/hueristiq/hq-go-http/blob/master/LICENSE) ![maintenance](https://img.shields.io/badge/maintained%3F-yes-1E90FF.svg) [![open issues](https://img.shields.io/github/issues-raw/hueristiq/hq-go-http.svg?style=flat&color=1E90FF)](https://github.com/hueristiq/hq-go-http/issues?q=is:issue+is:open) [![closed issues](https://img.shields.io/github/issues-closed-raw/hueristiq/hq-go-http.svg?style=flat&color=1E90FF)](https://github.com/hueristiq/hq-go-http/issues?q=is:issue+is:closed) [![contribution](https://img.shields.io/badge/contributions-welcome-1E90FF.svg)](https://github.com/hueristiq/hq-go-http/blob/master/CONTRIBUTING.md)
+![made with go](https://img.shields.io/badge/made%20with-Go-1E90FF.svg) [![go reference](https://pkg.go.dev/badge/github.com/hueristiq/hq-lib-http-go.svg)](https://pkg.go.dev/github.com/hueristiq/hq-lib-http-go) [![license](https://img.shields.io/badge/license-MIT-gray.svg?color=1E90FF)](https://github.com/hueristiq/hq-lib-http-go/blob/master/LICENSE) ![maintenance](https://img.shields.io/badge/maintained%3F-yes-1E90FF.svg) [![open issues](https://img.shields.io/github/issues-raw/hueristiq/hq-lib-http-go.svg?style=flat&color=1E90FF)](https://github.com/hueristiq/hq-lib-http-go/issues?q=is:issue+is:open) [![closed issues](https://img.shields.io/github/issues-closed-raw/hueristiq/hq-lib-http-go.svg?style=flat&color=1E90FF)](https://github.com/hueristiq/hq-lib-http-go/issues?q=is:issue+is:closed) [![contribution](https://img.shields.io/badge/contributions-welcome-1E90FF.svg)](https://github.com/hueristiq/hq-lib-http-go/blob/master/CONTRIBUTING.md)
 
-`hq-go-http` is a [Go](https://golang.org/) package for resilient, configurable HTTP communication: a client with context-aware retries that see both responses and errors, a fluent request builder, a rate-limiter hook, HTTP/2 fallback, raw HTTP/1.x requests, and User-Agent rotation.
+`hq-lib-http-go` is a [Go](https://golang.org/) package for resilient, configurable HTTP communication: a client with context-aware retries that see both responses and errors, a fluent request builder, a rate-limiter hook, HTTP/2 fallback, raw HTTP/1.x requests, and User-Agent rotation.
 
 ## Resources
 
@@ -22,7 +22,7 @@
 - **Context-Aware Retries:** Every entry point honors the caller's context. The retry engine retries connection and transport errors, `429`, and `5xx` responses, and honors `Retry-After` headers (capped at the maximum retry wait). The retry policy sees the response *and* the error of every attempt.
 - **Fluent Request Builder:** Assemble requests with a chainable `Method().BaseURL().Path().Param().SetHeader().AddHeader().Body().Do(ctx)` API.
 - **HTTP/1.x and HTTP/2:** The primary client negotiates HTTP/2 automatically; when a cleartext HTTP/1.x exchange fails because the server answered with HTTP/2 frames, the attempt is retried once on an HTTP/2 fallback client.
-- **Rate-Limiter Hook:** `WithRateLimiter` accepts any limiter with a `Wait(ctx) error` method — for example [hq-go-limiter](https://github.com/hueristiq/hq-go-limiter) — without imposing a module dependency.
+- **Rate-Limiter Hook:** `WithRateLimiter` accepts any limiter with a `Wait(ctx) error` method — for example [hq-lib-limiter-go](https://github.com/hueristiq/hq-lib-limiter-go) — without imposing a module dependency.
 - **Observability Callbacks:** `WithOnRequest` and `WithOnResponse` run around every attempt, for logging, metrics, and tracing.
 - **Raw HTTP/1.x Requests:** The `raw` subpackage sends raw request bytes over dialed connections — no normalization, no pooling, one exchange per connection.
 - **User-Agent Rotation:** `WithRandomUserAgent()` draws from a curated list of recent browser User-Agents; `WithUserAgent` sets a fixed one.
@@ -33,10 +33,10 @@ TLS/browser impersonation (surf-style fingerprinting) is deliberately out of sco
 
 ## Installation
 
-To install `hq-go-http`, run the following command in your Go project:
+To install `hq-lib-http-go`, run the following command in your Go project:
 
 ```bash
-go get -v -u github.com/hueristiq/hq-go-http
+go get -v -u github.com/hueristiq/hq-lib-http-go
 ```
 
 ## Usage
@@ -44,7 +44,7 @@ go get -v -u github.com/hueristiq/hq-go-http
 The examples below import the package under the `hqgohttp` alias.
 
 ```go
-import hqgohttp "github.com/hueristiq/hq-go-http"
+import hqgohttp "github.com/hueristiq/hq-lib-http-go"
 ```
 
 ### Basic Client
@@ -60,7 +60,7 @@ import (
 	"log"
 	"time"
 
-	hqgohttp "github.com/hueristiq/hq-go-http"
+	hqgohttp "github.com/hueristiq/hq-lib-http-go"
 )
 
 func main() {
@@ -98,10 +98,10 @@ import (
 	"io"
 	"log"
 
-	hqgohttp "github.com/hueristiq/hq-go-http"
-	"github.com/hueristiq/hq-go-http/header"
-	"github.com/hueristiq/hq-go-http/method"
-	"github.com/hueristiq/hq-go-http/mime"
+	hqgohttp "github.com/hueristiq/hq-lib-http-go"
+	"github.com/hueristiq/hq-lib-http-go/header"
+	"github.com/hueristiq/hq-lib-http-go/method"
+	"github.com/hueristiq/hq-lib-http-go/mime"
 )
 
 func main() {
@@ -150,7 +150,7 @@ import (
 	"net/http"
 	"time"
 
-	hqgohttp "github.com/hueristiq/hq-go-http"
+	hqgohttp "github.com/hueristiq/hq-lib-http-go"
 	hqgoretrierbackoff "github.com/hueristiq/hq-lib-retrier-go/backoff"
 )
 
@@ -198,7 +198,7 @@ import (
 	"io"
 	"log"
 
-	hqgohttpraw "github.com/hueristiq/hq-go-http/raw"
+	hqgohttpraw "github.com/hueristiq/hq-lib-http-go/raw"
 )
 
 func main() {
@@ -263,12 +263,12 @@ A per-request timeout needs no option: derive it with `context.WithTimeout` on t
 
 ## Contributing
 
-Contributions are welcome and encouraged! Feel free to submit [Pull Requests](https://github.com/hueristiq/hq-go-http/pulls) or report [Issues](https://github.com/hueristiq/hq-go-http/issues). For more details, check out the [contribution guidelines](https://github.com/hueristiq/hq-go-http/blob/master/CONTRIBUTING.md).
+Contributions are welcome and encouraged! Feel free to submit [Pull Requests](https://github.com/hueristiq/hq-lib-http-go/pulls) or report [Issues](https://github.com/hueristiq/hq-lib-http-go/issues). For more details, check out the [contribution guidelines](https://github.com/hueristiq/hq-lib-http-go/blob/master/CONTRIBUTING.md).
 
-A big thank you to all the [contributors](https://github.com/hueristiq/hq-go-http/graphs/contributors) for your ongoing support!
+A big thank you to all the [contributors](https://github.com/hueristiq/hq-lib-http-go/graphs/contributors) for your ongoing support!
 
-![contributors](https://contrib.rocks/image?repo=hueristiq/hq-go-http&max=500)
+![contributors](https://contrib.rocks/image?repo=hueristiq/hq-lib-http-go&max=500)
 
 ## Licensing
 
-This package is licensed under the [MIT license](https://opensource.org/license/mit). You are free to use, modify, and distribute it, as long as you follow the terms of the license. You can find the full license text in the repository - [Full MIT license text](https://github.com/hueristiq/hq-go-http/blob/master/LICENSE).
+This package is licensed under the [MIT license](https://opensource.org/license/mit). You are free to use, modify, and distribute it, as long as you follow the terms of the license. You can find the full license text in the repository - [Full MIT license text](https://github.com/hueristiq/hq-lib-http-go/blob/master/LICENSE).

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	hqgohttp "github.com/hueristiq/hq-go-http"
+	hqgohttp "github.com/hueristiq/hq-lib-http-go"
 )
 
 func TestDefaultHTTPPooledTransport(t *testing.T) {

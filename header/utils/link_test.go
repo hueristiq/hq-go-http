@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	hqgohttpheaderutils "github.com/hueristiq/hq-go-http/header/utils"
+	hqgohttpheaderutils "github.com/hueristiq/hq-lib-http-go/header/utils"
 )
 
 func TestLink_String(t *testing.T) {

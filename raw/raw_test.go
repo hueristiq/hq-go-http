@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	hqgohttpraw "github.com/hueristiq/hq-go-http/raw"
+	hqgohttpraw "github.com/hueristiq/hq-lib-http-go/raw"
 )
 
 // serveRawTCP accepts a single connection, captures the raw request bytes up

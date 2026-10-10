@@ -15,11 +15,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	hqgohttp "github.com/hueristiq/hq-go-http"
-	hqgohttpmethod "github.com/hueristiq/hq-go-http/method"
-	hqgohttprequest "github.com/hueristiq/hq-go-http/request"
-	hqgohttpstatus "github.com/hueristiq/hq-go-http/status"
-	hqgohttpuseragent "github.com/hueristiq/hq-go-http/useragent"
+	hqgohttp "github.com/hueristiq/hq-lib-http-go"
+	hqgohttpmethod "github.com/hueristiq/hq-lib-http-go/method"
+	hqgohttprequest "github.com/hueristiq/hq-lib-http-go/request"
+	hqgohttpstatus "github.com/hueristiq/hq-lib-http-go/status"
+	hqgohttpuseragent "github.com/hueristiq/hq-lib-http-go/useragent"
 	hqgoretrierbackoff "github.com/hueristiq/hq-lib-retrier-go/backoff"
 )
 

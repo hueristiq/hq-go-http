@@ -10,14 +10,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	hqgohttpmethod "github.com/hueristiq/hq-go-http/method"
-	hqgohttprequest "github.com/hueristiq/hq-go-http/request"
+	hqgohttpmethod "github.com/hueristiq/hq-lib-http-go/method"
+	hqgohttprequest "github.com/hueristiq/hq-lib-http-go/request"
 	hqgoretrier "github.com/hueristiq/hq-lib-retrier-go"
 	hqgoretrierbackoff "github.com/hueristiq/hq-lib-retrier-go/backoff"
 )
 
 // RateLimiter paces request attempts. It is the minimal surface the client
-// needs from a rate limiter: *Limiter from github.com/hueristiq/hq-go-limiter
+// needs from a rate limiter: *Limiter from github.com/hueristiq/hq-lib-limiter-go
 // satisfies it, and so does any compatible implementation — no module
 // dependency is imposed.
 type RateLimiter interface {

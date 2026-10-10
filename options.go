@@ -152,7 +152,7 @@ const (
 	//
 	// It applies when neither [WithUserAgent] nor [WithRandomUserAgent] is
 	// supplied and the request itself does not set a User-Agent header.
-	DefaultUserAgent = "hq-go-http (https://github.com/hueristiq/hq-go-http)"
+	DefaultUserAgent = "hq-lib-http-go (https://github.com/hueristiq/hq-lib-http-go)"
 )
 
 // WithHTTPClient returns a [ClientOptionFunc] that sets the underlying client
@@ -373,7 +373,7 @@ func WithRetryPolicy(retryPolicy RetryPolicy) (f ClientOptionFunc) {
 // waited on before every attempt of every request.
 //
 // The limiter is any value with a Wait method honoring a context — for
-// example a *Limiter from github.com/hueristiq/hq-go-limiter — so no module
+// example a *Limiter from github.com/hueristiq/hq-lib-limiter-go — so no module
 // dependency is imposed. A limiter shared across clients must be safe for
 // concurrent use.
 //

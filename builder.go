@@ -8,10 +8,10 @@ import (
 	"net/url"
 	"strings"
 
-	hqgohttpheader "github.com/hueristiq/hq-go-http/header"
-	hqgohttpmethod "github.com/hueristiq/hq-go-http/method"
-	hqgohttprequest "github.com/hueristiq/hq-go-http/request"
-	hqgohttpuseragent "github.com/hueristiq/hq-go-http/useragent"
+	hqgohttpheader "github.com/hueristiq/hq-lib-http-go/header"
+	hqgohttpmethod "github.com/hueristiq/hq-lib-http-go/method"
+	hqgohttprequest "github.com/hueristiq/hq-lib-http-go/request"
+	hqgohttpuseragent "github.com/hueristiq/hq-lib-http-go/useragent"
 )
 
 // RequestBuilder is an HTTP request under construction.

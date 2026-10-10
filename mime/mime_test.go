@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	hqgohttpmime "github.com/hueristiq/hq-go-http/mime"
+	hqgohttpmime "github.com/hueristiq/hq-lib-http-go/mime"
 )
 
 func TestMIME_String(t *testing.T) {

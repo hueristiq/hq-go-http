@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	hqgohttpstatus "github.com/hueristiq/hq-go-http/status"
+	hqgohttpstatus "github.com/hueristiq/hq-lib-http-go/status"
 )
 
 func TestStatus_Int(t *testing.T) {

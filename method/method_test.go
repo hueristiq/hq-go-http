@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	hqgohttpmethod "github.com/hueristiq/hq-go-http/method"
+	hqgohttpmethod "github.com/hueristiq/hq-lib-http-go/method"
 )
 
 func TestMethod_String(t *testing.T) {

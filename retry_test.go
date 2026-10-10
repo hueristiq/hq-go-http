@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	hqgohttp "github.com/hueristiq/hq-go-http"
-	hqgohttpstatus "github.com/hueristiq/hq-go-http/status"
+	hqgohttp "github.com/hueristiq/hq-lib-http-go"
+	hqgohttpstatus "github.com/hueristiq/hq-lib-http-go/status"
 )
 
 func TestDefaultRetryPolicy(t *testing.T) {

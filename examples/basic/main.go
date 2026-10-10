@@ -6,9 +6,9 @@ import (
 	"log"
 	"net/http/httputil"
 
-	hqgohttp "github.com/hueristiq/hq-go-http"
-	"github.com/hueristiq/hq-go-http/header"
-	"github.com/hueristiq/hq-go-http/method"
+	hqgohttp "github.com/hueristiq/hq-lib-http-go"
+	"github.com/hueristiq/hq-lib-http-go/header"
+	"github.com/hueristiq/hq-lib-http-go/method"
 )
 
 func main() {

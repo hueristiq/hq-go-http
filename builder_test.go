@@ -10,11 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	hqgohttp "github.com/hueristiq/hq-go-http"
-	hqgohttpheader "github.com/hueristiq/hq-go-http/header"
-	hqgohttpmethod "github.com/hueristiq/hq-go-http/method"
-	hqgohttpmime "github.com/hueristiq/hq-go-http/mime"
-	hqgohttpstatus "github.com/hueristiq/hq-go-http/status"
+	hqgohttp "github.com/hueristiq/hq-lib-http-go"
+	hqgohttpheader "github.com/hueristiq/hq-lib-http-go/header"
+	hqgohttpmethod "github.com/hueristiq/hq-lib-http-go/method"
+	hqgohttpmime "github.com/hueristiq/hq-lib-http-go/mime"
+	hqgohttpstatus "github.com/hueristiq/hq-lib-http-go/status"
 )
 
 // requestMirror captures what a request assembled by the builder looks like

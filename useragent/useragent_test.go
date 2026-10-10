@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	hqgohttpuseragent "github.com/hueristiq/hq-go-http/useragent"
+	hqgohttpuseragent "github.com/hueristiq/hq-lib-http-go/useragent"
 )
 
 func TestList(t *testing.T) {
