@@ -2,560 +2,551 @@ package http
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	hqgohttpheader "github.com/hueristiq/hq-go-http/header"
-	hqgohttpmethod "github.com/hueristiq/hq-go-http/method"
-	hqgohttprequest "github.com/hueristiq/hq-go-http/request"
-	hqgoretrier "github.com/hueristiq/hq-go-retrier"
-	hqgoretrierbackoff "github.com/hueristiq/hq-go-retrier/backoff"
-	"golang.org/x/net/http2"
+	hqgohttpmethod "github.com/hueristiq/hq-lib-http-go/method"
+	hqgohttprequest "github.com/hueristiq/hq-lib-http-go/request"
+	hqgoretrier "github.com/hueristiq/hq-lib-retrier-go"
+	hqgoretrierbackoff "github.com/hueristiq/hq-lib-retrier-go/backoff"
 )
 
+// RateLimiter paces request attempts. It is the minimal surface the client
+// needs from a rate limiter: *Limiter from github.com/hueristiq/hq-lib-limiter-go
+// satisfies it, and so does any compatible implementation — no module
+// dependency is imposed.
+type RateLimiter interface {
+	// Wait blocks until the next attempt may proceed or ctx is done.
+	Wait(ctx context.Context) (err error)
+}
+
+// OnRequestFunc is the callback invoked with the outgoing request before
+// every attempt of every request, registered with [WithOnRequest].
+//
+// Parameters:
+//   - req (*http.Request): the request about to be sent.
+type OnRequestFunc func(req *http.Request)
+
+// OnResponseFunc is the callback invoked with the outcome of every attempt of
+// every request — before the retry policy is consulted — registered with
+// [WithOnResponse].
+//
+// Parameters:
+//   - resp (*http.Response): the response received on the attempt, or nil.
+//   - err (error): the transport error of the attempt, or nil.
+type OnResponseFunc func(resp *http.Response, err error)
+
 // Client is the primary structure used to perform HTTP requests.
-// It manages both global and request-specific configurations, and maintains
-// separate underlying HTTP clients for HTTP/1.x and HTTP/2.
-// Additionally, it tracks the number of requests made to trigger periodic
-// connection resets, preventing resource exhaustion in long-running applications.
+//
+// It executes requests with retry logic, honoring the caller's context, a
+// configurable retry policy that sees both the response and the error of each
+// attempt, a rate limiter hook, and observability callbacks. It maintains two
+// underlying clients: the primary one executing requests, and an HTTP/2
+// fallback used when a cleartext HTTP/1.x exchange fails because the server
+// answered with HTTP/2 frames. It can also periodically close idle
+// connections to bound resource usage in long-running processes.
+//
+// A Client is immutable after construction and safe for concurrent use; only
+// the request counter driving the periodic idle-connection close mutates,
+// through atomic operations. Construct through [NewClient]; the zero value is
+// not usable.
 //
 // Fields:
-//   - cfg (*ClientConfiguration): Global configuration settings that apply to all requests.
-//   - internalHTTPClient (*http.Client): The underlying HTTP client instance used for HTTP/1.x requests.
-//   - internalHTTP2Client (*http.Client): A fallback HTTP client instance used for HTTP/2 requests.
-//   - rc (atomic.Uint32): An atomic counter tracking the number of requests executed.
-//     When a preset threshold is reached, idle connections are closed to free resources.
+//   - clientOptions: the embedded configuration — see its Fields list.
+//   - fallbackHTTPClient (*http.Client): the client used when the primary
+//     client fails with the HTTP/1.x transport broken error.
+//   - requestCount (atomic.Uint64): the number of completed executions since
+//     the last idle-connection close.
 type Client struct {
-	cfg                 *ClientConfiguration
-	internalHTTPClient  *http.Client
-	internalHTTP2Client *http.Client
-	rc                  atomic.Uint32
+	clientOptions
+
+	fallbackHTTPClient *http.Client
+	requestCount       atomic.Uint64
 }
 
-// Do executes an HTTP request using the Client.
-// It applies retry logic, error handling, and, when necessary, falls back to the HTTP/2 client
-// if the HTTP/1.x client fails due to a specific transport error.
-// It supports automatic connection draining (to enable connection reuse) and integrates
-// with the retry policy defined in the request configuration.
+// NewClient creates a [Client] configured by the given options.
+//
+// Unset options fall back to defaults: a pooled HTTP/1.x client with HTTP/2
+// support, no base URL, [DefaultUserAgent] as User-Agent, [DefaultTimeout]
+// per execution, [DefaultMaxRetries] retries with waits between
+// [DefaultRetryWaitMin] and [DefaultRetryWaitMax] under exponential backoff
+// with decorrelated jitter, [DefaultRetryPolicy], no rate limiter, no
+// callbacks, no periodic idle-connection close, and [DefaultResponseReadLimit]
+// as the drain bound. Invalid values are normalized the same way — see each
+// option's documentation.
 //
 // Parameters:
-//   - req (*hqgohttprequest.Request): A pointer to a request.Request instance that wraps an *http.Request.
-//     This wrapper allows the request body to be reusable between retries.
-//   - cfg (*RequestConfiguration): Request-specific configuration overrides including retry settings,
-//     response read limits, and additional parameters.
+//   - ofs (...ClientOptionFunc): functional options configuring the client.
 //
 // Returns:
-//   - res (*http.Response): The HTTP response received upon success.
-//   - err (error): An error if the request ultimately fails after all retry attempts.
-func (c *Client) Do(req *hqgohttprequest.Request, cfg *RequestConfiguration) (res *http.Response, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.cfg.Timeout)
+//   - client (*Client): a new client, ready to execute requests.
+//   - err (error): non-nil when the HTTP/2 fallback transport cannot be
+//     configured — practically impossible, as the transport is built from
+//     scratch here.
+func NewClient(ofs ...ClientOptionFunc) (client *Client, err error) {
+	opts := &clientOptions{
+		timeout:           DefaultTimeout,
+		maxRetries:        DefaultMaxRetries,
+		retryWaitMin:      DefaultRetryWaitMin,
+		retryWaitMax:      DefaultRetryWaitMax,
+		newRetryBackoff:   hqgoretrierbackoff.ExponentialWithDecorrelatedJitter,
+		retryPolicy:       DefaultRetryPolicy,
+		userAgent:         DefaultUserAgent,
+		responseReadLimit: DefaultResponseReadLimit,
+	}
 
-	defer cancel()
+	for _, of := range ofs {
+		of(opts)
+	}
 
-	res, err = hqgoretrier.RetryWithData(ctx, func() (res *http.Response, err error) {
-		res, err = c.internalHTTPClient.Do(req.Request)
+	opts.normalize()
 
-		if err != nil && isErrorHTTP1Broken(err) {
-			res, err = c.internalHTTP2Client.Do(req.Request)
+	client = &Client{clientOptions: *opts}
+
+	if client.httpClient == nil {
+		client.httpClient = &http.Client{
+			Transport: DefaultHTTPPooledTransport(),
+		}
+	}
+
+	fallbackHTTPClient, err := newFallbackHTTPClient()
+	if err != nil {
+		err = fmt.Errorf("http.NewClient: configuring HTTP/2 fallback transport: %w", err)
+
+		client = nil
+
+		return
+	}
+
+	client.fallbackHTTPClient = fallbackHTTPClient
+
+	return
+}
+
+// Do executes req, honoring the caller's context, with retries driven by the
+// resolved configuration: the client configuration overlaid with ofs.
+//
+// The execution — every attempt and every wait between them — is bounded by
+// ctx, tightened by the configured timeout when the context carries no
+// earlier deadline. A nil ctx falls back to the request's own context;
+// otherwise req is shallow-copied onto ctx, so the caller's request is never
+// mutated.
+//
+// Each attempt waits on the configured rate limiter, runs the OnRequest
+// callback, executes the request, runs the OnResponse callback, and consults
+// the retry policy. A request body built through the request package or
+// [Client.NewRequest] is reusable, so every attempt resends it in full. When
+// the primary client fails with the HTTP/1.x transport broken error, the
+// attempt is retried once on the HTTP/2 fallback client before the policy is
+// consulted.
+//
+// Outcomes:
+//   - Success: the final response with its body open — the caller owns and
+//     must close it.
+//   - Attempts exhausted on retryable failures: a nil response and a
+//     "giving up" error wrapping the last failure. The last response's body
+//     was drained and closed.
+//   - Context done: a nil response and the context's error.
+//   - Retry policy abort (non-nil rerr): the attempt's response — body open,
+//     caller-owned — and rerr.
+//
+// Parameters:
+//   - ctx (context.Context): the context governing the whole execution.
+//   - req (*hqgohttprequest.Request): the request to execute.
+//   - ofs (...RequestOptionFunc): per-request overrides of the execution
+//     knobs; the client configuration stays untouched.
+//
+// Returns:
+//   - res (*http.Response): the final response, or nil on failure (except a
+//     policy abort, which returns the attempt's response).
+//   - err (error): non-nil when the execution fails.
+func (c *Client) Do(ctx context.Context, req *hqgohttprequest.Request, ofs ...RequestOptionFunc) (res *http.Response, err error) {
+	if req == nil || req.Request == nil {
+		err = errors.New("http.Client.Do: request is nil")
+
+		return
+	}
+
+	if ctx == nil {
+		//nolint:contextcheck // Falling back to the request's own context is exactly the documented behavior.
+		ctx = req.Context()
+	}
+
+	opts := c.requestOptions(ofs...)
+
+	if c.timeout > 0 {
+		var cancel context.CancelFunc
+
+		ctx, cancel = context.WithTimeout(ctx, c.timeout)
+
+		defer cancel()
+	}
+
+	req = &hqgohttprequest.Request{Request: req.WithContext(ctx)}
+
+	// retryAfter carries the wait honored from a Retry-After header from the
+	// attempt operation to the backoff strategy. Both run on the retry loop's
+	// goroutine, so a plain variable is safe.
+	var retryAfter time.Duration
+
+	operation := func() (attemptRes *http.Response, attemptErr error) {
+		retryAfter = 0
+
+		if opts.rateLimiter != nil {
+			if werr := opts.rateLimiter.Wait(ctx); werr != nil {
+				attemptErr = fmt.Errorf("http.Client.Do: waiting on rate limiter: %w", werr)
+
+				return
+			}
 		}
 
-		retry, retryPolicyError := cfg.RetryPolicy(req.Context(), err)
+		if c.onRequest != nil {
+			c.onRequest(req.Request)
+		}
+
+		attemptRes, attemptErr = c.httpClient.Do(req.Request)
+
+		if attemptErr != nil && isHTTP1BrokenTransportError(attemptErr) {
+			attemptRes, attemptErr = c.fallbackHTTPClient.Do(req.Request)
+		}
+
+		if c.onResponse != nil {
+			c.onResponse(attemptRes, attemptErr)
+		}
+
+		if attemptRes == nil && attemptErr == nil {
+			attemptErr = errors.New("the transport returned neither a response nor an error")
+		}
+
+		retry, rerr := opts.retryPolicy(ctx, attemptRes, attemptErr)
+		if rerr != nil {
+			attemptErr = rerr
+
+			return
+		}
 
 		if !retry {
-			if retryPolicyError != nil {
-				err = retryPolicyError
-			}
-
-			c.closeIdleConnections()
-
 			return
 		}
 
-		if err == nil && res != nil {
-			drainBody(res.Body, cfg.RespReadLimit)
+		if attemptRes != nil {
+			if wait, ok := retryAfterWait(attemptRes); ok {
+				retryAfter = wait
+			}
+
+			drainBody(attemptRes.Body, opts.responseReadLimit)
 		}
 
+		if attemptErr == nil {
+			attemptErr = fmt.Errorf("unexpected HTTP status %s", attemptRes.Status)
+		}
+
+		attemptErr = &retryableError{err: attemptErr}
+
 		return
-	},
-		hqgoretrier.WithRetryMax(cfg.RetryMax),
-		hqgoretrier.WithRetryWaitMin(cfg.RetryWaitMin),
-		hqgoretrier.WithRetryWaitMax(cfg.RetryWaitMax),
-		hqgoretrier.WithRetryBackoff(cfg.RetryBackoff),
+	}
+
+	res, err = hqgoretrier.RetryWithData(ctx, operation,
+		hqgoretrier.WithMaxAttempts(opts.maxRetries+1),
+		hqgoretrier.WithWaitMin(opts.retryWaitMin),
+		hqgoretrier.WithWaitMax(opts.retryWaitMax),
+		hqgoretrier.WithBackoff(func(minDelay, maxDelay time.Duration) (backoff hqgoretrierbackoff.Backoff) {
+			base := opts.newRetryBackoff(minDelay, maxDelay)
+
+			return func(attempt int) (delay time.Duration) {
+				if retryAfter > 0 {
+					delay = min(retryAfter, maxDelay)
+
+					retryAfter = 0
+
+					return
+				}
+
+				delay = base(attempt)
+
+				return
+			}
+		}),
+		hqgoretrier.WithRetryOn(isMarkedRetryable),
 	)
-	if err != nil {
-		msg := fmt.Sprintf("giving up after %d attempts (method: %s, url: %s)", cfg.RetryMax, req.Method, req.URL)
 
-		if res != nil {
-			msg = fmt.Sprintf("%s, status: %s", msg, res.Status)
+	c.closeIdleConnectionsIfDue()
 
-			res.Body.Close()
-		}
+	var marker *retryableError
 
-		err = fmt.Errorf("%s: %w", msg, err)
+	switch {
+	case err == nil:
+		// The final response with its body open; the caller owns it.
+	case errors.As(err, &marker):
+		// Attempts exhausted: the last response's body was already drained.
+		res = nil
 
-		c.closeIdleConnections()
+		err = fmt.Errorf("http.Client.Do: giving up after %d attempt(s) (%s %s): %w",
+			opts.maxRetries+1, req.Method, req.URL.Redacted(), marker.err)
+	case ctx.Err() != nil:
+		// The context ended the execution; the last response, if any, is in an
+		// unknown body state, so it is not handed out.
+		res = nil
 	}
 
 	return
 }
 
-// closeIdleConnections manages connection reuse by monitoring the number of requests made.
-// When the request counter reaches a threshold (100 requests), the counter is reset and the
-// client's idle connections are forcefully closed. This mechanism helps prevent potential
-// resource leaks in high-volume scenarios.
-//
-// Note: The behavior is enabled only if the ClientConfiguration.CloseIdleConnections flag is true.
-func (c *Client) closeIdleConnections() {
-	if c.cfg.CloseIdleConnections {
-		if c.rc.Load() < 100 {
-			c.rc.Add(1)
-		} else {
-			c.rc.Store(0)
-
-			c.internalHTTPClient.CloseIdleConnections()
-		}
-	}
-}
-
-// Request builds and executes an HTTP request based on merged client and request-specific configurations.
-// It constructs the request by setting the HTTP method, URL (including base URL and query parameters),
-// headers, and body. After preparing the request, it delegates execution to the Do method.
+// requestOptions resolves the execution configuration for a single request:
+// the client configuration overlaid with the given overrides.
 //
 // Parameters:
-//   - configurations (...*RequestConfiguration): One or more pointers to RequestConfiguration instances
-//     that provide request-specific overrides. These configurations are merged with the global client settings.
+//   - ofs (...RequestOptionFunc): the per-request overrides.
 //
 // Returns:
-//   - res (*http.Response): The HTTP response from the executed request if successful.
-//   - err (error): An error encountered during configuration, request construction, or execution.
-func (c *Client) Request(configurations ...*RequestConfiguration) (res *http.Response, err error) {
-	var cfg *RequestConfiguration
-
-	cfg, err = c.getRequestConfiguration(configurations...)
-	if err != nil {
-		return
+//   - opts (*requestOptions): the resolved, normalized configuration.
+func (c *Client) requestOptions(ofs ...RequestOptionFunc) (opts *requestOptions) {
+	opts = &requestOptions{
+		maxRetries:        c.maxRetries,
+		retryWaitMin:      c.retryWaitMin,
+		retryWaitMax:      c.retryWaitMax,
+		newRetryBackoff:   c.newRetryBackoff,
+		retryPolicy:       c.retryPolicy,
+		rateLimiter:       c.rateLimiter,
+		responseReadLimit: c.responseReadLimit,
 	}
 
-	var req *hqgohttprequest.Request
-
-	req, err = hqgohttprequest.New(cfg.Method.String(), cfg.URL, cfg.Body)
-	if err != nil {
-		return
+	for _, of := range ofs {
+		of(opts)
 	}
 
-	for _, header := range cfg.Headers {
-		switch header.operation {
-		case headerOperationAppend:
-			req.Header.Add(header.key, header.value)
-		case headerOperationReplace:
-			req.Header.Set(header.key, header.value)
-		}
-	}
-
-	res, err = c.Do(req, cfg)
+	opts.normalize()
 
 	return
 }
 
-// getRequestConfiguration merges one or more RequestConfiguration objects with the client's default configuration.
-// It applies overrides for HTTP method, base URL, URL path, query parameters, headers, body, timeout,
-// and retry settings. If a BaseURL is provided, it is combined with the relative URL. Additionally,
-// query parameters are appended to the URL's query string.
-//
-// Parameters:
-//   - configurations (...*RequestConfiguration): Variadic list of pointers to RequestConfiguration instances.
-//
-// Returns:
-//   - cfg (*RequestConfiguration): The merged RequestConfiguration.
-//   - err (error): An error if merging configurations or constructing the final URL fails.
-func (c *Client) getRequestConfiguration(configurations ...*RequestConfiguration) (cfg *RequestConfiguration, err error) {
-	cfg = &RequestConfiguration{
-		Method:        c.cfg.Method,
-		BaseURL:       c.cfg.BaseURL,
-		URL:           c.cfg.URL,
-		Params:        make(map[string]string),
-		Headers:       []Header{},
-		Body:          c.cfg.Body,
-		RespReadLimit: c.cfg.RespReadLimit,
-		RetryPolicy:   c.cfg.RetryPolicy,
-		RetryMax:      c.cfg.RetryMax,
-		RetryWaitMin:  c.cfg.RetryWaitMin,
-		RetryWaitMax:  c.cfg.RetryWaitMax,
-		RetryBackoff:  c.cfg.RetryBackoff,
+// CloseIdleConnections closes the idle connections of both underlying
+// clients, freeing file descriptors held by their connection pools.
+// In-flight requests are unaffected.
+func (c *Client) CloseIdleConnections() {
+	c.httpClient.CloseIdleConnections()
+	c.fallbackHTTPClient.CloseIdleConnections()
+}
+
+// closeIdleConnectionsIfDue counts a completed execution and, once the
+// configured threshold is reached, closes idle connections and restarts the
+// count. A non-positive threshold disables the periodic closing.
+func (c *Client) closeIdleConnectionsIfDue() {
+	if c.maxRequestsBeforeIdleClose <= 0 {
+		return
 	}
 
-	if c.cfg.Params != nil {
-		for k, v := range c.cfg.Params {
-			cfg.Params[k] = v
-		}
-	}
+	for {
+		count := c.requestCount.Load()
 
-	if c.cfg.Headers != nil {
-		cfg.Headers = append(cfg.Headers, c.cfg.Headers...)
-	}
-
-	for _, configuration := range configurations {
-		if configuration.Method != "" {
-			cfg.Method = configuration.Method
-		}
-
-		if configuration.BaseURL != "" {
-			cfg.BaseURL = configuration.BaseURL
-		}
-
-		if configuration.URL != "" {
-			cfg.URL = configuration.URL
-		}
-
-		if configuration.Params != nil {
-			for k, v := range configuration.Params {
-				cfg.Params[k] = v
+		if count+1 < uint64(c.maxRequestsBeforeIdleClose) {
+			if c.requestCount.CompareAndSwap(count, count+1) {
+				return
 			}
+
+			continue
 		}
 
-		if configuration.Headers != nil {
-			cfg.Headers = append(cfg.Headers, configuration.Headers...)
-		}
+		if c.requestCount.CompareAndSwap(count, 0) {
+			c.CloseIdleConnections()
 
-		if configuration.Body != "" {
-			cfg.Body = configuration.Body
-		}
-
-		if configuration.RespReadLimit > 0 {
-			cfg.RespReadLimit = configuration.RespReadLimit
-		}
-
-		if configuration.RetryPolicy != nil {
-			cfg.RetryPolicy = configuration.RetryPolicy
-		}
-
-		if configuration.RetryMax > 0 {
-			cfg.RetryMax = configuration.RetryMax
-		}
-
-		if configuration.RetryWaitMin > 0 {
-			cfg.RetryWaitMin = configuration.RetryWaitMin
-		}
-
-		if configuration.RetryWaitMax > 0 {
-			cfg.RetryWaitMax = configuration.RetryWaitMax
-		}
-
-		if configuration.RetryBackoff != nil {
-			cfg.RetryBackoff = configuration.RetryBackoff
-		}
-	}
-
-	if cfg.BaseURL != "" {
-		cfg.URL, err = url.JoinPath(cfg.BaseURL, cfg.URL)
-		if err != nil {
 			return
 		}
 	}
-
-	if len(cfg.Params) > 0 {
-		var parsed *url.URL
-
-		parsed, err = url.Parse(cfg.URL)
-		if err != nil {
-			return
-		}
-
-		q := parsed.Query()
-
-		for k, v := range cfg.Params {
-			q.Add(k, v)
-		}
-
-		parsed.RawQuery = q.Encode()
-
-		cfg.URL = parsed.String()
-	}
-
-	return
 }
 
 // Get is a convenience method for performing an HTTP GET request.
-// It sets the HTTP method to GET and delegates request execution to the Request method.
 //
 // Parameters:
-//   - URL (string): The target URL for the GET request.
-//   - configurations (...*RequestConfiguration): Optional request configuration overrides.
+//   - ctx (context.Context): the context governing the whole execution.
+//   - rawURL (string): the target URL — absolute, or relative when a base URL
+//     is configured.
+//   - ofs (...RequestOptionFunc): per-request overrides of the execution
+//     knobs.
 //
 // Returns:
-//   - res (*http.Response): The response received from the server.
-//   - err (error): An error if the request fails.
-func (c *Client) Get(URL string, configurations ...*RequestConfiguration) (res *http.Response, err error) {
-	configurations = append(configurations, &RequestConfiguration{
-		Method: hqgohttpmethod.GET,
-		URL:    URL,
-	})
-
-	res, err = c.Request(configurations...)
+//   - res (*http.Response): the response received from the server.
+//   - err (error): non-nil when the request fails.
+func (c *Client) Get(ctx context.Context, rawURL string, ofs ...RequestOptionFunc) (res *http.Response, err error) {
+	res, err = c.NewRequest().Method(hqgohttpmethod.GET).URL(rawURL).WithOptions(ofs...).Do(ctx)
 
 	return
 }
 
 // Head is a convenience method for performing an HTTP HEAD request.
-// It sets the HTTP method to HEAD and delegates request execution to the Request method.
 //
 // Parameters:
-//   - URL (string): The target URL for the HEAD request.
-//   - configurations (...*RequestConfiguration): Optional request configuration overrides.
+//   - ctx (context.Context): the context governing the whole execution.
+//   - rawURL (string): the target URL — absolute, or relative when a base URL
+//     is configured.
+//   - ofs (...RequestOptionFunc): per-request overrides of the execution
+//     knobs.
 //
 // Returns:
-//   - res (*http.Response): The response received from the server.
-//   - err (error): An error if the request fails.
-func (c *Client) Head(URL string, configurations ...*RequestConfiguration) (res *http.Response, err error) {
-	configurations = append(configurations, &RequestConfiguration{
-		Method: hqgohttpmethod.HEAD,
-		URL:    URL,
-	})
-
-	res, err = c.Request(configurations...)
+//   - res (*http.Response): the response received from the server.
+//   - err (error): non-nil when the request fails.
+func (c *Client) Head(ctx context.Context, rawURL string, ofs ...RequestOptionFunc) (res *http.Response, err error) {
+	res, err = c.NewRequest().Method(hqgohttpmethod.HEAD).URL(rawURL).WithOptions(ofs...).Do(ctx)
 
 	return
 }
 
-// Put is a convenience method for performing an HTTP PUT request with a provided body.
-// It sets the HTTP method to PUT and delegates request execution to the Request method.
+// Post is a convenience method for performing an HTTP POST request with a
+// body.
+//
+// The body accepts the types supported by the request package: a string, a
+// []byte, an io.Reader, an io.ReadSeeker, a *bytes.Buffer, a
+// func() (io.Reader, error), or a ReusableReadCloser.
 //
 // Parameters:
-//   - URL (string): The target URL for the PUT request.
-//   - body (interface{}): The payload to include in the PUT request.
-//   - configurations (...*RequestConfiguration): Optional request configuration overrides.
+//   - ctx (context.Context): the context governing the whole execution.
+//   - rawURL (string): the target URL — absolute, or relative when a base URL
+//     is configured.
+//   - body (any): the request payload; nil means no body.
+//   - ofs (...RequestOptionFunc): per-request overrides of the execution
+//     knobs.
 //
 // Returns:
-//   - res (*http.Response): The response received from the server.
-//   - err (error): An error if the request fails.
-func (c *Client) Put(URL string, body interface{}, configurations ...*RequestConfiguration) (res *http.Response, err error) {
-	configurations = append(configurations, &RequestConfiguration{
-		Method: hqgohttpmethod.PUT,
-		URL:    URL,
-		Body:   body,
-	})
+//   - res (*http.Response): the response received from the server.
+//   - err (error): non-nil when the request fails.
+func (c *Client) Post(ctx context.Context, rawURL string, body any, ofs ...RequestOptionFunc) (res *http.Response, err error) {
+	res, err = c.NewRequest().Method(hqgohttpmethod.POST).URL(rawURL).Body(body).WithOptions(ofs...).Do(ctx)
 
-	res, err = c.Request(configurations...)
+	return
+}
+
+// Put is a convenience method for performing an HTTP PUT request with a body.
+// See [Client.Post] for the accepted body types.
+//
+// Parameters:
+//   - ctx (context.Context): the context governing the whole execution.
+//   - rawURL (string): the target URL — absolute, or relative when a base URL
+//     is configured.
+//   - body (any): the request payload; nil means no body.
+//   - ofs (...RequestOptionFunc): per-request overrides of the execution
+//     knobs.
+//
+// Returns:
+//   - res (*http.Response): the response received from the server.
+//   - err (error): non-nil when the request fails.
+func (c *Client) Put(ctx context.Context, rawURL string, body any, ofs ...RequestOptionFunc) (res *http.Response, err error) {
+	res, err = c.NewRequest().Method(hqgohttpmethod.PUT).URL(rawURL).Body(body).WithOptions(ofs...).Do(ctx)
+
+	return
+}
+
+// Patch is a convenience method for performing an HTTP PATCH request with a
+// body. See [Client.Post] for the accepted body types.
+//
+// Parameters:
+//   - ctx (context.Context): the context governing the whole execution.
+//   - rawURL (string): the target URL — absolute, or relative when a base URL
+//     is configured.
+//   - body (any): the request payload; nil means no body.
+//   - ofs (...RequestOptionFunc): per-request overrides of the execution
+//     knobs.
+//
+// Returns:
+//   - res (*http.Response): the response received from the server.
+//   - err (error): non-nil when the request fails.
+func (c *Client) Patch(ctx context.Context, rawURL string, body any, ofs ...RequestOptionFunc) (res *http.Response, err error) {
+	res, err = c.NewRequest().Method(hqgohttpmethod.PATCH).URL(rawURL).Body(body).WithOptions(ofs...).Do(ctx)
 
 	return
 }
 
 // Delete is a convenience method for performing an HTTP DELETE request.
-// It sets the HTTP method to DELETE and delegates request execution to the Request method.
 //
 // Parameters:
-//   - URL (string): The target URL for the DELETE request.
-//   - configurations (...*RequestConfiguration): Optional request configuration overrides.
+//   - ctx (context.Context): the context governing the whole execution.
+//   - rawURL (string): the target URL — absolute, or relative when a base URL
+//     is configured.
+//   - ofs (...RequestOptionFunc): per-request overrides of the execution
+//     knobs.
 //
 // Returns:
-//   - res (*http.Response): The response received from the server.
-//   - err (error): An error if the request fails.
-func (c *Client) Delete(URL string, configurations ...*RequestConfiguration) (res *http.Response, err error) {
-	configurations = append(configurations, &RequestConfiguration{
-		Method: hqgohttpmethod.DELETE,
-		URL:    URL,
-	})
-
-	res, err = c.Request(configurations...)
-
-	return
-}
-
-// Post is a convenience method for performing an HTTP POST request with a provided body.
-// It sets the HTTP method to POST and delegates request execution to the Request method.
-//
-// Parameters:
-//   - URL (string): The target URL for the POST request.
-//   - body (interface{}): The payload to include in the POST request.
-//   - configurations (...*RequestConfiguration): Optional request configuration overrides.
-//
-// Returns:
-//   - res (*http.Response): The response received from the server.
-//   - err (error): An error if the request fails.
-func (c *Client) Post(URL string, body interface{}, configurations ...*RequestConfiguration) (res *http.Response, err error) {
-	configurations = append(configurations, &RequestConfiguration{
-		Method: hqgohttpmethod.POST,
-		URL:    URL,
-		Body:   body,
-	})
-
-	res, err = c.Request(configurations...)
+//   - res (*http.Response): the response received from the server.
+//   - err (error): non-nil when the request fails.
+func (c *Client) Delete(ctx context.Context, rawURL string, ofs ...RequestOptionFunc) (res *http.Response, err error) {
+	res, err = c.NewRequest().Method(hqgohttpmethod.DELETE).URL(rawURL).WithOptions(ofs...).Do(ctx)
 
 	return
 }
 
 // Options is a convenience method for performing an HTTP OPTIONS request.
-// It sets the HTTP method to OPTIONS and delegates request execution to the Request method.
 //
 // Parameters:
-//   - URL (string): The target URL for the OPTIONS request.
-//   - configurations (...*RequestConfiguration): Optional request configuration overrides.
+//   - ctx (context.Context): the context governing the whole execution.
+//   - rawURL (string): the target URL — absolute, or relative when a base URL
+//     is configured.
+//   - ofs (...RequestOptionFunc): per-request overrides of the execution
+//     knobs.
 //
 // Returns:
-//   - res (*http.Response): The response received from the server.
-//   - err (error): An error if the request fails.
-func (c *Client) Options(URL string, configurations ...*RequestConfiguration) (res *http.Response, err error) {
-	configurations = append(configurations, &RequestConfiguration{
-		Method: hqgohttpmethod.OPTIONS,
-		URL:    URL,
-	})
-
-	res, err = c.Request(configurations...)
+//   - res (*http.Response): the response received from the server.
+//   - err (error): non-nil when the request fails.
+func (c *Client) Options(ctx context.Context, rawURL string, ofs ...RequestOptionFunc) (res *http.Response, err error) {
+	res, err = c.NewRequest().Method(hqgohttpmethod.OPTIONS).URL(rawURL).WithOptions(ofs...).Do(ctx)
 
 	return
 }
 
-// ClientConfiguration encapsulates various configuration options for the Client.
-// It controls HTTP client behavior including timeouts, retry logic, backoff strategies,
-// connection management, and default request values.
+// isMarkedRetryable reports whether err carries the retryable marker, i.e.
+// whether the retry engine should schedule another attempt. Errors without
+// the marker are final and returned to the caller unchanged.
 //
-// Fields:
-//   - Client (*http.Client): An optional custom HTTP client to be used. If nil, a default client is used.
-//   - Timeout (time.Duration): The maximum duration allowed for each HTTP request.
-//   - CloseIdleConnections (bool): Determines whether idle connections should be periodically closed.
-//   - Method (hqgohttpmethod.Method): The default HTTP method to use (e.g., GET, POST) if not overridden.
-//   - BaseURL (string): A base URL that is prefixed to all request URLs.
-//   - URL (string): The default URL path that can be combined with BaseURL.
-//   - Params (map[string]string): Default query parameters appended to every request.
-//   - Headers ([]Header): Default HTTP headers included in every request.
-//   - Body (interface{}): The default request body; can be overridden per request.
-//   - RespReadLimit (int64): The maximum number of bytes to drain from a response body to allow connection reuse.
-//   - RetryPolicy (RetryPolicy): A function that determines whether a request should be retried.
-//   - RetryMax (int): The maximum number of retry attempts before giving up.
-//   - RetryWaitMin (time.Duration): The minimum wait time between retries.
-//   - RetryWaitMax (time.Duration): The maximum wait time between retries.
-//   - RetryBackoff (hqgoretrierbackoff.Backoff): The backoff strategy used to calculate wait times between retries.
-type ClientConfiguration struct {
-	Client               *http.Client
-	Timeout              time.Duration
-	CloseIdleConnections bool
-	Method               hqgohttpmethod.Method
-	BaseURL              string
-	URL                  string
-	Params               map[string]string
-	Headers              []Header
-	Body                 interface{}
-	RespReadLimit        int64
-	RetryPolicy          RetryPolicy
-	RetryMax             int
-	RetryWaitMin         time.Duration
-	RetryWaitMax         time.Duration
-	RetryBackoff         hqgoretrierbackoff.Backoff
-}
-
-// Configuration ensures that all configuration fields are properly initialized.
-// It creates empty maps for Params and Headers if they are nil, and sets default
-// retry policy and backoff strategy if they are not provided.
+// Parameters:
+//   - err (error): the failure to classify.
 //
 // Returns:
-//   - configuration (*ClientConfiguration): A pointer to the initialized configuration.
-func (c *ClientConfiguration) Configuration() (configuration *ClientConfiguration) {
-	configuration = c
+//   - retry (bool): true when another attempt may follow.
+func isMarkedRetryable(err error) (retry bool) {
+	var marker *retryableError
 
-	if configuration.Params == nil {
-		configuration.Params = make(map[string]string)
-	}
-
-	if configuration.Headers == nil {
-		configuration.Headers = []Header{
-			NewSetHeader(hqgohttpheader.UserAgent.String(), "hq-go-http (https://github.com/hueristiq/hq-go-http.git)"),
-		}
-	}
-
-	if configuration.RetryPolicy == nil {
-		configuration.RetryPolicy = DefaultRetryPolicy()
-	}
-
-	if configuration.RetryBackoff == nil {
-		configuration.RetryBackoff = hqgoretrierbackoff.Exponential()
-	}
+	retry = errors.As(err, &marker)
 
 	return
 }
 
-// NewClient creates and configures a new Client based on the provided ClientConfiguration.
-// It initializes both HTTP/1.x and HTTP/2 clients, applies retry policies, backoff strategies,
-// and sets up connection management settings.
+// isHTTP1BrokenTransportError reports whether err is the failure net/http
+// produces when a cleartext HTTP/1.x exchange receives an HTTP/2 frame: the
+// server speaks HTTP/2 without an upgrade. When it fires, the attempt is
+// retried on the HTTP/2 fallback client.
+//
+// net/http builds this error as
+// fmt.Errorf("net/http: HTTP/1.x transport connection broken: %w", err)
+// wrapping an unexported badStringError, so no errors.As target exists;
+// matching the message is the only way to detect it. The check is isolated
+// here so the string match lives in exactly one place.
 //
 // Parameters:
-//   - cfg (*ClientConfiguration): A pointer to a ClientConfiguration containing desired settings.
+//   - err (error): the error to inspect.
 //
 // Returns:
-//   - client (*Client): A pointer to the newly created Client instance.
-//   - err (error): An error if client initialization fails.
-func NewClient(cfg *ClientConfiguration) (client *Client, err error) {
-	client = &Client{
-		cfg: cfg.Configuration(),
-	}
-
-	internalHTTPClient := DefaultHTTPPooledClient()
-
-	if client.cfg.CloseIdleConnections {
-		internalHTTPClient = DefaultHTTPClient()
-	}
-
-	if client.cfg.Client != nil {
-		internalHTTPClient = client.cfg.Client
-	}
-
-	if internalHTTPClient != nil || !client.cfg.CloseIdleConnections {
-		if b, ok := internalHTTPClient.Transport.(*http.Transport); ok {
-			client.cfg.CloseIdleConnections = b.DisableKeepAlives || b.MaxConnsPerHost < 0
-		}
-	}
-
-	client.internalHTTPClient = internalHTTPClient
-
-	internalHTTP2Client := DefaultHTTPClient()
-
-	internalHTTP2Transport, ok := internalHTTP2Client.Transport.(*http.Transport)
-	if !ok {
-		return
-	}
-
-	if err = http2.ConfigureTransport(internalHTTP2Transport); err != nil {
-		return
-	}
-
-	client.internalHTTP2Client = internalHTTP2Client
-
-	if client.cfg.Timeout > 0 {
-		client.internalHTTPClient.Timeout = client.cfg.Timeout
-		client.internalHTTP2Client.Timeout = client.cfg.Timeout
-	}
+//   - broken (bool): true when the error indicates a broken HTTP/1.x
+//     transport connection.
+func isHTTP1BrokenTransportError(err error) (broken bool) {
+	broken = err != nil &&
+		strings.Contains(err.Error(), `net/http: HTTP/1.x transport connection broken: malformed HTTP version "HTTP/2"`)
 
 	return
 }
 
-// isErrorHTTP1Broken checks whether the provided error indicates a specific HTTP/1.x transport issue.
-// In particular, it detects errors that mention a broken HTTP/1.x connection due to a malformed HTTP version.
-// Such errors suggest that an HTTP/2 connection might be more appropriate.
+// drainBody reads and discards up to limit bytes from body and closes it, so
+// the underlying connection can be reused for future requests.
 //
 // Parameters:
-//   - err (error): The error to inspect.
-//
-// Returns:
-//   - isErrorHTTP1Broken (bool): True if the error indicates a broken HTTP/1.x connection; otherwise, false.
-func isErrorHTTP1Broken(err error) (isErrorHTTP1Broken bool) {
-	isErrorHTTP1Broken = err != nil && strings.Contains(err.Error(), "net/http: HTTP/1.x transport connection broken: malformed HTTP version \"HTTP/2\"")
-
-	return
-}
-
-// drainBody reads and discards up to 'limit' bytes from the provided response body.
-// Draining the body ensures that the underlying TCP connection can be reused for future requests.
-// After reading, the response body is closed to prevent resource leaks.
-//
-// Parameters:
-//   - body (io.ReadCloser): The response body to drain.
-//   - limit (int64): The maximum number of bytes to read from the response body.
+//   - body (io.ReadCloser): the response body to drain.
+//   - limit (int64): the maximum number of bytes to read.
 func drainBody(body io.ReadCloser, limit int64) {
-	defer body.Close()
+	defer func() {
+		_ = body.Close()
+	}()
 
 	_, _ = io.Copy(io.Discard, io.LimitReader(body, limit))
 }
