@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	hqgourlparser "github.com/hueristiq/hq-go-url/parser"
+	hqgourlparser "github.com/hueristiq/hq-lib-url-go/parser"
 )
 
 // schemeDefaultingParser is the parser [New] builds URLs with. It is

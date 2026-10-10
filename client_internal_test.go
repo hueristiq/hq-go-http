@@ -66,7 +66,7 @@ func TestClient_Do_HTTP1BrokenTransportFallsBack(t *testing.T) {
 		newFallbackHTTPClient = original
 	})
 
-	newFallbackHTTPClient = func() (client *http.Client, err error) {
+	newFallbackHTTPClient = func() (client *http.Client) {
 		client = &http.Client{
 			Transport: roundTripFunc(func(_ *http.Request) (res *http.Response, err error) {
 				fallbackCalls.Add(1)
@@ -121,7 +121,7 @@ func TestClient_Do_OtherTransportErrorsDoNotFallBack(t *testing.T) {
 		newFallbackHTTPClient = original
 	})
 
-	newFallbackHTTPClient = func() (client *http.Client, err error) {
+	newFallbackHTTPClient = func() (client *http.Client) {
 		client = &http.Client{
 			Transport: roundTripFunc(func(_ *http.Request) (res *http.Response, err error) {
 				fallbackCalls.Add(1)

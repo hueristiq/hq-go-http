@@ -1,12 +1,8 @@
-github.com/hueristiq/hq-go-url v0.0.0-20251117030909-afc6001dd8c9 h1:u1pGpSrGB2yWZuWLulUpGASAB3jq4YA15XyLJZvvFdY=
-github.com/hueristiq/hq-go-url v0.0.0-20251117030909-afc6001dd8c9/go.mod h1:bTeGF5A6JmdB5OvEYsdFlAHfdY+Hf1R1CM/tLVImjXo=
-github.com/hueristiq/hq-lib-retrier-go v0.0.0-20260731090227-892759daf25d h1:vgIIs/DpysevbRGWcbv7G8Df5pvXVetyK0Rud7+hlBg=
-github.com/hueristiq/hq-lib-retrier-go v0.0.0-20260731090227-892759daf25d/go.mod h1:Hho3LCtaNW6i59Uxz4O4iVMvBBR11+ccbqrh5T99EGo=
+github.com/hueristiq/hq-lib-retrier-go v0.0.0-20261010161048-3671b972e456 h1:nn5czA3UveqmdeAPG+OBoKNlnI8v307B2F5iSZd8iwg=
+github.com/hueristiq/hq-lib-retrier-go v0.0.0-20261010161048-3671b972e456/go.mod h1:nlLZAx5Q3nHZqpnUaemxx1HLdQ7RGYm7x84dTdRxt+U=
+github.com/hueristiq/hq-lib-url-go v0.0.0-20261010162221-77019bf7ddc1 h1:+pNyqGrcPCqvEuY+xwF16F4MQ3EN5UOa9en4u4d6u2A=
+github.com/hueristiq/hq-lib-url-go v0.0.0-20261010162221-77019bf7ddc1/go.mod h1:4euQEewth0mran7PKFRv1dEHVBCLE/kcEG8+tbLS8U4=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
 go.yaml.in/yaml/v3 v3.0.5 h1:N6y/pJk8buWs9NY5ERU2HSMfm+IuD/OtfdAnq6kESPw=
 go.yaml.in/yaml/v3 v3.0.5/go.mod h1:HVTZu1O7/Vkt2N+BFy8Zza+lnLsABggaTM2ZpNIGuKg=
-golang.org/x/net v0.61.0 h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw=
-golang.org/x/net v0.61.0/go.mod h1:WgDCOTH8iwtB66T4/GfI94AHo/hhdb7Hah9NDseQfiI=
-golang.org/x/text v0.43.0 h1:1QivrlhwAsnMOcqgOdl9my7s9OyZl8O5/UGUTJVXoWc=
-golang.org/x/text v0.43.0/go.mod h1:hbSIYA/amXcRXTFSZqh8tWHEoqRvvbKPJ2uz/KU+a+s=

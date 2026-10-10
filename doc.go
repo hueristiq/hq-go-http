@@ -91,7 +91,6 @@
 // stdlib-first. The raw subpackage covers byte-exact HTTP/1.x requests.
 //
 // The implementation relies on the Go standard library, plus
-// golang.org/x/net (HTTP/2 fallback transport configuration),
-// github.com/hueristiq/hq-go-url (URL parsing with scheme defaulting), and
+// github.com/hueristiq/hq-lib-url-go (URL parsing with scheme defaulting), and
 // github.com/hueristiq/hq-lib-retrier-go (the retry engine).
 package http

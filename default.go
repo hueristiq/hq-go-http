@@ -7,20 +7,18 @@ import (
 	"runtime"
 	"sync"
 	"time"
-
-	"golang.org/x/net/http2"
 )
 
 // newFallbackHTTPClient builds the fallback client used when a cleartext
 // HTTP/1.x exchange fails because the server answered with HTTP/2 frames. It
 // is declared as a package-level variable so tests can substitute a client
 // with a scripted transport.
-var newFallbackHTTPClient = func() (client *http.Client, err error) {
+var newFallbackHTTPClient = func() (client *http.Client) {
 	transport := DefaultHTTPTransport()
 
-	if err = http2.ConfigureTransport(transport); err != nil {
-		return
-	}
+	transport.Protocols = new(http.Protocols)
+	transport.Protocols.SetHTTP1(true)
+	transport.Protocols.SetHTTP2(true)
 
 	client = &http.Client{
 		Transport: transport,
@@ -30,9 +28,8 @@ var newFallbackHTTPClient = func() (client *http.Client, err error) {
 }
 
 // defaultClient is the shared client behind the package-level shortcuts,
-// built lazily on first use. Construction errors — practically impossible,
-// since only the HTTP/2 fallback configuration can fail, on a transport built
-// from scratch — are not swallowed: every shortcut reports them.
+// built lazily on first use. Its construction cannot fail; the error result
+// is propagated anyway rather than swallowed, so every shortcut reports it.
 var defaultClient = sync.OnceValues(func() (client *Client, err error) {
 	client, err = NewClient()
 

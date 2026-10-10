@@ -16,5 +16,5 @@
 // none is given, so "example.com/path" is a valid URL.
 //
 // The implementation relies on the Go standard library, plus
-// github.com/hueristiq/hq-go-url (URL parsing with scheme defaulting).
+// github.com/hueristiq/hq-lib-url-go (URL parsing with scheme defaulting).
 package request

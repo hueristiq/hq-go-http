@@ -85,9 +85,8 @@ type Client struct {
 //
 // Returns:
 //   - client (*Client): a new client, ready to execute requests.
-//   - err (error): non-nil when the HTTP/2 fallback transport cannot be
-//     configured — practically impossible, as the transport is built from
-//     scratch here.
+//   - err (error): always nil — construction cannot fail; the result is kept
+//     for backward compatibility.
 func NewClient(ofs ...ClientOptionFunc) (client *Client, err error) {
 	opts := &clientOptions{
 		timeout:           DefaultTimeout,
@@ -114,16 +113,7 @@ func NewClient(ofs ...ClientOptionFunc) (client *Client, err error) {
 		}
 	}
 
-	fallbackHTTPClient, err := newFallbackHTTPClient()
-	if err != nil {
-		err = fmt.Errorf("http.NewClient: configuring HTTP/2 fallback transport: %w", err)
-
-		client = nil
-
-		return
-	}
-
-	client.fallbackHTTPClient = fallbackHTTPClient
+	client.fallbackHTTPClient = newFallbackHTTPClient()
 
 	return
 }
