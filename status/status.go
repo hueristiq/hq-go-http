@@ -2,6 +2,7 @@ package status
 
 import (
 	"fmt"
+	"net/http"
 )
 
 // Status represents HTTP status codes as defined by the IANA registry.
@@ -27,138 +28,17 @@ func (s Status) Int() (status int) {
 
 // String returns the human-readable description of the HTTP status code.
 //
-// It maps the Status value to its standard descriptive text as defined in the HTTP specification.
-// If an unknown status code is encountered, the method returns a formatted string indicating
-// that the code is unknown.
+// The description comes from net/http's StatusText, the standard reason
+// phrases. If an unknown status code is encountered, the method returns a
+// formatted string indicating that the code is unknown.
 //
 // Returns:
 //   - status (string): The descriptive text for the HTTP status code.
 func (s Status) String() (status string) {
-	switch s {
-	case Continue:
-		status = "Continue"
-	case SwitchingProtocols:
-		status = "Switching Protocols"
-	case Processing:
-		status = "Processing"
-	case EarlyHints:
-		status = "Early Hints"
-	case OK:
-		status = "OK"
-	case Created:
-		status = "Created"
-	case Accepted:
-		status = "Accepted"
-	case NonAuthoritativeInfo:
-		status = "Non-Authoritative Information"
-	case NoContent:
-		status = "No Content"
-	case ResetContent:
-		status = "Reset Content"
-	case PartialContent:
-		status = "Partial Content"
-	case MultiStatus:
-		status = "Multi-Status"
-	case AlreadyReported:
-		status = "Already Reported"
-	case IMUsed:
-		status = "IM Used"
-	case MultipleChoices:
-		status = "Multiple Choices"
-	case MovedPermanently:
-		status = "Moved Permanently"
-	case Found:
-		status = "Found"
-	case SeeOther:
-		status = "See Other"
-	case NotModified:
-		status = "Not Modified"
-	case UseProxy:
-		status = "Use Proxy"
-	case TemporaryRedirect:
-		status = "Temporary Redirect"
-	case PermanentRedirect:
-		status = "Permanent Redirect"
-	case BadRequest:
-		status = "Bad Request"
-	case Unauthorized:
-		status = "Unauthorized"
-	case PaymentRequired:
-		status = "Payment Required"
-	case Forbidden:
-		status = "Forbidden"
-	case NotFound:
-		status = "Not Found"
-	case MethodNotAllowed:
-		status = "Method Not Allowed"
-	case NotAcceptable:
-		status = "Not Acceptable"
-	case ProxyAuthRequired:
-		status = "Proxy Authentication Required"
-	case RequestTimeout:
-		status = "Request Timeout"
-	case Conflict:
-		status = "Conflict"
-	case Gone:
-		status = "Gone"
-	case LengthRequired:
-		status = "Length Required"
-	case PreconditionFailed:
-		status = "Precondition Failed"
-	case RequestEntityTooLarge:
-		status = "Request Entity Too Large"
-	case RequestURITooLong:
-		status = "Request URI Too Long"
-	case UnsupportedMediaType:
-		status = "Unsupported Media Type"
-	case RequestedRangeNotSatisfiable:
-		status = "Requested Range Not Satisfiable"
-	case ExpectationFailed:
-		status = "Expectation Failed"
-	case Teapot:
-		status = "I'm a teapot"
-	case MisdirectedRequest:
-		status = "Misdirected Request"
-	case UnprocessableEntity:
-		status = "Unprocessable Entity"
-	case Locked:
-		status = "Locked"
-	case FailedDependency:
-		status = "Failed Dependency"
-	case UpgradeRequired:
-		status = "Upgrade Required"
-	case PreconditionRequired:
-		status = "Precondition Required"
-	case TooManyRequests:
-		status = "Too Many Requests"
-	case RequestHeaderFieldsTooLarge:
-		status = "Request Header Fields Too Large"
-	case UnavailableForLegalReasons:
-		status = "Unavailable For Legal Reasons"
-	case InternalServerError:
-		status = "Internal Server Error"
-	case NotImplemented:
-		status = "Not Implemented"
-	case BadGateway:
-		status = "Bad Gateway"
-	case ServiceUnavailable:
-		status = "Service Unavailable"
-	case GatewayTimeout:
-		status = "Gateway Timeout"
-	case HTTPVersionNotSupported:
-		status = "HTTP Version Not Supported"
-	case VariantAlsoNegotiates:
-		status = "Variant Also Negotiates"
-	case InsufficientStorage:
-		status = "Insufficient Storage"
-	case LoopDetected:
-		status = "Loop Detected"
-	case NotExtended:
-		status = "Not Extended"
-	case NetworkAuthenticationRequired:
-		status = "Network Authentication Required"
-	default:
-		status = fmt.Sprintf("Unknown Status (%d)", s)
+	status = http.StatusText(s.Int())
+
+	if status == "" {
+		status = fmt.Sprintf("Unknown Status (%d)", s.Int())
 	}
 
 	return
@@ -166,8 +46,8 @@ func (s Status) String() (status string) {
 
 // IsInformational checks if the status code is an informational response (1xx).
 //
-// Informational responses (100–199) indicate that the request has been received and is being processed,
-// but no final response is yet available.
+// Informational responses (100–199) indicate that the request has been received
+// and is being processed, but no final response is yet available.
 //
 // Returns:
 //   - isInformational (bool): True if s is between 100 and 199, false otherwise.
@@ -177,8 +57,8 @@ func (s Status) IsInformational() (isInformational bool) {
 
 // IsSuccess checks if the status code indicates a successful response (2xx).
 //
-// Success responses (200–299) indicate that the request was successfully received,
-// understood, and accepted by the server.
+// Success responses (200–299) indicate that the request was successfully
+// received, understood, and accepted by the server.
 //
 // Returns:
 //   - isSuccess (bool): True if s is between 200 and 299, false otherwise.
@@ -188,8 +68,8 @@ func (s Status) IsSuccess() (isSuccess bool) {
 
 // IsRedirection checks if the status code indicates a redirection (3xx).
 //
-// Redirection responses (300–399) indicate that further action is needed to fulfill the request,
-// usually involving a change in URL or method.
+// Redirection responses (300–399) indicate that further action is needed to
+// fulfill the request, usually involving a change in URL or method.
 //
 // Returns:
 //   - isRedirection (bool): True if s is between 300 and 399, false otherwise.
@@ -197,19 +77,24 @@ func (s Status) IsRedirection() (isRedirection bool) {
 	return s >= 300 && s < 400
 }
 
-// IsError checks if the status code represents an error (either client or server error).
+// IsError checks if the status code represents an error (either client or
+// server error).
 //
-// A status code is considered an error if it is either a client error (4xx) or a server error (5xx).
+// A status code is considered an error if it is either a client error (4xx) or
+// a server error (5xx).
 //
 // Returns:
 //   - isError (bool): True if s is in the 4xx or 5xx range, false otherwise.
 func (s Status) IsError() (isError bool) {
-	return s.IsClientError() || s.IsServerError()
+	isError = s.IsClientError() || s.IsServerError()
+
+	return
 }
 
 // IsClientError checks if the status code indicates a client error (4xx).
 //
-// Client error responses (400–499) indicate that the client sent an invalid request.
+// Client error responses (400–499) indicate that the client sent an invalid
+// request.
 //
 // Returns:
 //   - isClientError (bool): True if s is between 400 and 499, false otherwise.
@@ -219,7 +104,8 @@ func (s Status) IsClientError() (isClientError bool) {
 
 // IsServerError checks if the status code indicates a server error (5xx).
 //
-// Server error responses (500–599) indicate that the server failed to fulfill a valid request.
+// Server error responses (500–599) indicate that the server failed to fulfill a
+// valid request.
 //
 // Returns:
 //   - isServerError (bool): True if s is between 500 and 599, false otherwise.
@@ -229,7 +115,8 @@ func (s Status) IsServerError() (isServerError bool) {
 
 // Predefined Status type constants.
 //
-// The following constants define standard HTTP status codes, grouped by category.
+// The following constants define standard HTTP status codes, grouped by
+// category.
 const (
 	Continue                      Status = 100
 	SwitchingProtocols            Status = 101

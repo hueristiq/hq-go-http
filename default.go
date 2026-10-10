@@ -5,77 +5,54 @@ import (
 	"net"
 	"net/http"
 	"runtime"
+	"sync"
 	"time"
 )
 
-var (
-	// DefaultClient is a package-level default Client instance that is automatically
-	// initialized during package startup in the init() function. It uses the
-	// DefaultSingleClientConfiguration, which is suitable for standard connection pooling.
-	DefaultClient *Client
+// newFallbackHTTPClient builds the fallback client used when a cleartext
+// HTTP/1.x exchange fails because the server answered with HTTP/2 frames. It
+// is declared as a package-level variable so tests can substitute a client
+// with a scripted transport.
+var newFallbackHTTPClient = func() (client *http.Client) {
+	transport := DefaultHTTPTransport()
 
-	// DefaultSingleClientConfiguration defines a default configuration for a standard HTTP client.
-	// It is intended for scenarios where connection pooling is acceptable.
-	DefaultSingleClientConfiguration = &ClientConfiguration{
-		Timeout:              30 * time.Second,
-		CloseIdleConnections: false,
-		RetryMax:             3,
-		RetryWaitMin:         1 * time.Second,
-		RetryWaitMax:         30 * time.Second,
-		RespReadLimit:        4096,
-	}
+	transport.Protocols = new(http.Protocols)
+	transport.Protocols.SetHTTP1(true)
+	transport.Protocols.SetHTTP2(true)
 
-	// DefaultSprayingClientConfiguration defines a default configuration for scenarios such as host spraying,
-	// where killing idle connections is desirable to reduce resource usage.
-	DefaultSprayingClientConfiguration = &ClientConfiguration{
-		Timeout:              30 * time.Second,
-		CloseIdleConnections: true,
-		RetryMax:             3,
-		RetryWaitMin:         1 * time.Second,
-		RetryWaitMax:         30 * time.Second,
-		RespReadLimit:        4096,
-	}
-)
-
-// init is executed during package initialization. It creates a default Client instance
-// using the DefaultSingleClientConfiguration. Any errors during client creation are ignored.
-func init() {
-	DefaultClient, _ = NewClient(DefaultSingleClientConfiguration)
-}
-
-// DefaultHTTPPooledClient returns a new *http.Client configured with a shared transport that supports
-// connection pooling. It is optimized for clients that make repeated requests to the same host,
-// allowing efficient reuse of TCP connections.
-//
-// Warning: This client should be used for long-lived operations. For short-lived operations,
-// consider using DefaultHTTPClient to avoid leaking file descriptors.
-//
-// Returns:
-//   - client (*http.Client): A pointer to a newly created pooled http.Client.
-func DefaultHTTPPooledClient() (client *http.Client) {
 	client = &http.Client{
-		Transport: DefaultHTTPPooledTransport(),
+		Transport: transport,
 	}
 
 	return
 }
 
-// DefaultHTTPPooledTransport returns a new *http.Transport configured for connection pooling.
-// It sets various parameters such as timeouts, keep-alives, and idle connection limits to
-// optimize connection reuse for repeated requests.
+// defaultClient is the shared client behind the package-level shortcuts,
+// built lazily on first use. Its construction cannot fail; the error result
+// is propagated anyway rather than swallowed, so every shortcut reports it.
+var defaultClient = sync.OnceValues(func() (client *Client, err error) {
+	client, err = NewClient()
+
+	return
+})
+
+// DefaultHTTPPooledTransport returns a new *http.Transport configured for
+// connection pooling, with HTTP/2 support negotiated automatically.
 //
-// Warning: This transport is intended for long-lived clients. Using it for transient clients
-// may lead to file descriptor leaks.
+// It is optimized for clients making repeated requests to the same hosts,
+// allowing efficient reuse of TCP connections.
+//
+// Warning: the transport is intended for long-lived clients. For transient
+// clients, consider [DefaultHTTPTransport] to avoid leaking file descriptors.
 //
 // Returns:
-//   - transport (*http.Transport): A pointer to a newly configured pooled http.Transport.
+//   - transport (*http.Transport): a newly configured pooled transport.
 func DefaultHTTPPooledTransport() (transport *http.Transport) {
 	transport = &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
 			Timeout:   30 * time.Second,
 			KeepAlive: 30 * time.Second,
-			DualStack: true,
 		}).DialContext,
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
@@ -88,12 +65,15 @@ func DefaultHTTPPooledTransport() (transport *http.Transport) {
 	return
 }
 
-// DefaultHTTPTransport returns a new *http.Transport configured to disable idle connections
-// and keep-alives. It is derived from DefaultHTTPPooledTransport but modified to avoid
-// connection reuse, making it suitable for transient requests.
+// DefaultHTTPTransport returns a new *http.Transport derived from
+// [DefaultHTTPPooledTransport] but with keep-alives and idle connections
+// disabled, so no connection is ever reused.
+//
+// It suits transient clients and host-spraying scenarios, where connection
+// reuse across changing hosts is unwanted.
 //
 // Returns:
-//   - transport (*http.Transport): A pointer to a newly configured http.Transport with idle connections disabled.
+//   - transport (*http.Transport): a newly configured non-pooled transport.
 func DefaultHTTPTransport() (transport *http.Transport) {
 	transport = DefaultHTTPPooledTransport()
 
@@ -103,12 +83,24 @@ func DefaultHTTPTransport() (transport *http.Transport) {
 	return
 }
 
-// DefaultHTTPClient returns a new *http.Client configured with a non-shared transport.
-// Idle connections and keep-alives are disabled, making it suitable for transient requests
-// where connection reuse is not desired.
+// DefaultHTTPPooledClient returns a new *http.Client on a
+// [DefaultHTTPPooledTransport].
 //
 // Returns:
-//   - client (*http.Client): A pointer to a newly created http.Client with a non-pooled transport.
+//   - client (*http.Client): a newly created pooled client.
+func DefaultHTTPPooledClient() (client *http.Client) {
+	client = &http.Client{
+		Transport: DefaultHTTPPooledTransport(),
+	}
+
+	return
+}
+
+// DefaultHTTPClient returns a new *http.Client on a [DefaultHTTPTransport],
+// so no connection is ever reused.
+//
+// Returns:
+//   - client (*http.Client): a newly created non-pooled client.
 func DefaultHTTPClient() (client *http.Client) {
 	client = &http.Client{
 		Transport: DefaultHTTPTransport(),
@@ -117,106 +109,169 @@ func DefaultHTTPClient() (client *http.Client) {
 	return
 }
 
-// DefaultRetryPolicy returns a default RetryPolicy function that determines if a request should be retried.
-// It bases its decision on whether the encountered error is recoverable by delegating to isErrorRecoverable.
-//
-// Returns:
-//   - A RetryPolicy function that accepts a context and error, and returns a boolean indicating retry and an error.
-func DefaultRetryPolicy() func(ctx context.Context, err error) (retry bool, errr error) {
-	return isErrorRecoverable
-}
-
-// HostSprayRetryPolicy returns a RetryPolicy function tailored for scenarios where multiple hosts are being
-// targeted concurrently (host spraying). Currently, it delegates to the same isErrorRecoverable function as the default.
-//
-// Returns:
-//   - A RetryPolicy function suitable for host spraying scenarios.
-func HostSprayRetryPolicy() func(ctx context.Context, err error) (retry bool, errr error) {
-	return isErrorRecoverable
-}
-
-// Get performs an HTTP GET request using the DefaultClient.
-// It is a shortcut for DefaultClient.Get.
+// Get performs an HTTP GET request through the shared default client.
 //
 // Parameters:
-//   - URL (string): The target URL for the GET request.
-//   - configurations (...*RequestConfiguration): Optional overrides for the request configuration.
+//   - ctx (context.Context): the context governing the whole execution.
+//   - rawURL (string): the target URL.
+//   - ofs (...RequestOptionFunc): per-request overrides of the execution
+//     knobs.
 //
 // Returns:
-//   - res (*http.Response): The response received from the server.
-//   - err (error): An error if the request fails.
-func Get(URL string, configurations ...*RequestConfiguration) (res *http.Response, err error) {
-	return DefaultClient.Get(URL, configurations...)
+//   - res (*http.Response): the response received from the server.
+//   - err (error): non-nil when the default client cannot be constructed or
+//     the request fails.
+func Get(ctx context.Context, rawURL string, ofs ...RequestOptionFunc) (res *http.Response, err error) {
+	client, err := defaultClient()
+	if err != nil {
+		return
+	}
+
+	res, err = client.Get(ctx, rawURL, ofs...)
+
+	return
 }
 
-// Head performs an HTTP HEAD request using the DefaultClient.
-// It is a shortcut for DefaultClient.Head.
+// Head performs an HTTP HEAD request through the shared default client.
 //
 // Parameters:
-//   - URL (string): The target URL for the HEAD request.
-//   - configurations (...*RequestConfiguration): Optional overrides for the request configuration.
+//   - ctx (context.Context): the context governing the whole execution.
+//   - rawURL (string): the target URL.
+//   - ofs (...RequestOptionFunc): per-request overrides of the execution
+//     knobs.
 //
 // Returns:
-//   - res (*http.Response): The response received from the server.
-//   - err (error): An error if the request fails.
-func Head(URL string, configurations ...*RequestConfiguration) (res *http.Response, err error) {
-	return DefaultClient.Head(URL, configurations...)
+//   - res (*http.Response): the response received from the server.
+//   - err (error): non-nil when the default client cannot be constructed or
+//     the request fails.
+func Head(ctx context.Context, rawURL string, ofs ...RequestOptionFunc) (res *http.Response, err error) {
+	client, err := defaultClient()
+	if err != nil {
+		return
+	}
+
+	res, err = client.Head(ctx, rawURL, ofs...)
+
+	return
 }
 
-// Put performs an HTTP PUT request using the DefaultClient.
-// It is a shortcut for DefaultClient.Put.
+// Post performs an HTTP POST request with a body through the shared default
+// client. See [Client.Post] for the accepted body types.
 //
 // Parameters:
-//   - URL (string): The target URL for the PUT request.
-//   - body (interface{}): The payload to include in the PUT request.
-//   - configurations (...*RequestConfiguration): Optional overrides for the request configuration.
+//   - ctx (context.Context): the context governing the whole execution.
+//   - rawURL (string): the target URL.
+//   - body (any): the request payload; nil means no body.
+//   - ofs (...RequestOptionFunc): per-request overrides of the execution
+//     knobs.
 //
 // Returns:
-//   - res (*http.Response): The response received from the server.
-//   - err (error): An error if the request fails.
-func Put(URL string, body interface{}, configurations ...*RequestConfiguration) (res *http.Response, err error) {
-	return DefaultClient.Put(URL, body, configurations...)
+//   - res (*http.Response): the response received from the server.
+//   - err (error): non-nil when the default client cannot be constructed or
+//     the request fails.
+func Post(ctx context.Context, rawURL string, body any, ofs ...RequestOptionFunc) (res *http.Response, err error) {
+	client, err := defaultClient()
+	if err != nil {
+		return
+	}
+
+	res, err = client.Post(ctx, rawURL, body, ofs...)
+
+	return
 }
 
-// Delete performs an HTTP DELETE request using the DefaultClient.
-// It is a shortcut for DefaultClient.Delete.
+// Put performs an HTTP PUT request with a body through the shared default
+// client. See [Client.Post] for the accepted body types.
 //
 // Parameters:
-//   - URL (string): The target URL for the DELETE request.
-//   - configurations (...*RequestConfiguration): Optional overrides for the request configuration.
+//   - ctx (context.Context): the context governing the whole execution.
+//   - rawURL (string): the target URL.
+//   - body (any): the request payload; nil means no body.
+//   - ofs (...RequestOptionFunc): per-request overrides of the execution
+//     knobs.
 //
 // Returns:
-//   - res (*http.Response): The response received from the server.
-//   - err (error): An error if the request fails.
-func Delete(URL string, configurations ...*RequestConfiguration) (res *http.Response, err error) {
-	return DefaultClient.Delete(URL, configurations...)
+//   - res (*http.Response): the response received from the server.
+//   - err (error): non-nil when the default client cannot be constructed or
+//     the request fails.
+func Put(ctx context.Context, rawURL string, body any, ofs ...RequestOptionFunc) (res *http.Response, err error) {
+	client, err := defaultClient()
+	if err != nil {
+		return
+	}
+
+	res, err = client.Put(ctx, rawURL, body, ofs...)
+
+	return
 }
 
-// Post performs an HTTP POST request using the DefaultClient.
-// It is a shortcut for DefaultClient.Post.
+// Patch performs an HTTP PATCH request with a body through the shared default
+// client. See [Client.Post] for the accepted body types.
 //
 // Parameters:
-//   - URL (string): The target URL for the POST request.
-//   - body (interface{}): The payload to include in the POST request.
-//   - configurations (...*RequestConfiguration): Optional overrides for the request configuration.
+//   - ctx (context.Context): the context governing the whole execution.
+//   - rawURL (string): the target URL.
+//   - body (any): the request payload; nil means no body.
+//   - ofs (...RequestOptionFunc): per-request overrides of the execution
+//     knobs.
 //
 // Returns:
-//   - res (*http.Response): The response received from the server.
-//   - err (error): An error if the request fails.
-func Post(URL string, body interface{}, configurations ...*RequestConfiguration) (res *http.Response, err error) {
-	return DefaultClient.Post(URL, body, configurations...)
+//   - res (*http.Response): the response received from the server.
+//   - err (error): non-nil when the default client cannot be constructed or
+//     the request fails.
+func Patch(ctx context.Context, rawURL string, body any, ofs ...RequestOptionFunc) (res *http.Response, err error) {
+	client, err := defaultClient()
+	if err != nil {
+		return
+	}
+
+	res, err = client.Patch(ctx, rawURL, body, ofs...)
+
+	return
 }
 
-// Options performs an HTTP OPTIONS request using the DefaultClient.
-// It is a shortcut for DefaultClient.Options.
+// Delete performs an HTTP DELETE request through the shared default client.
 //
 // Parameters:
-//   - URL (string): The target URL for the OPTIONS request.
-//   - configurations (...*RequestConfiguration): Optional overrides for the request configuration.
+//   - ctx (context.Context): the context governing the whole execution.
+//   - rawURL (string): the target URL.
+//   - ofs (...RequestOptionFunc): per-request overrides of the execution
+//     knobs.
 //
 // Returns:
-//   - res (*http.Response): The response received from the server.
-//   - err (error): An error if the request fails.
-func Options(URL string, configurations ...*RequestConfiguration) (res *http.Response, err error) {
-	return DefaultClient.Options(URL, configurations...)
+//   - res (*http.Response): the response received from the server.
+//   - err (error): non-nil when the default client cannot be constructed or
+//     the request fails.
+func Delete(ctx context.Context, rawURL string, ofs ...RequestOptionFunc) (res *http.Response, err error) {
+	client, err := defaultClient()
+	if err != nil {
+		return
+	}
+
+	res, err = client.Delete(ctx, rawURL, ofs...)
+
+	return
+}
+
+// Options performs an HTTP OPTIONS request through the shared default client.
+//
+// Parameters:
+//   - ctx (context.Context): the context governing the whole execution.
+//   - rawURL (string): the target URL.
+//   - ofs (...RequestOptionFunc): per-request overrides of the execution
+//     knobs.
+//
+// Returns:
+//   - res (*http.Response): the response received from the server.
+//   - err (error): non-nil when the default client cannot be constructed or
+//     the request fails.
+func Options(ctx context.Context, rawURL string, ofs ...RequestOptionFunc) (res *http.Response, err error) {
+	client, err := defaultClient()
+	if err != nil {
+		return
+	}
+
+	res, err = client.Options(ctx, rawURL, ofs...)
+
+	return
 }

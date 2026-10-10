@@ -6,73 +6,41 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"reflect"
+	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
-	"unsafe"
 
-	hqgohttp "github.com/hueristiq/hq-go-http"
-	hqgohttpstatus "github.com/hueristiq/hq-go-http/status"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	hqgohttp "github.com/hueristiq/hq-lib-http-go"
+	hqgohttpmethod "github.com/hueristiq/hq-lib-http-go/method"
+	hqgohttprequest "github.com/hueristiq/hq-lib-http-go/request"
+	hqgohttpstatus "github.com/hueristiq/hq-lib-http-go/status"
+	hqgohttpuseragent "github.com/hueristiq/hq-lib-http-go/useragent"
+	hqgoretrierbackoff "github.com/hueristiq/hq-lib-retrier-go/backoff"
 )
 
-type RoundTripFunc func(req *http.Request) (*http.Response, error)
-
-func (f RoundTripFunc) RoundTrip(req *http.Request) (res *http.Response, err error) {
-	res, err = f(req)
-
-	return
-}
-
-type fakeTransport struct {
-	rt                        RoundTripFunc
-	closeIdleConnectionsCount int32
-}
-
-func (ft *fakeTransport) RoundTrip(req *http.Request) (res *http.Response, err error) {
-	res, err = ft.rt(req)
-
-	return
-}
-
-func (ft *fakeTransport) CloseIdleConnections() {
-	atomic.AddInt32(&ft.closeIdleConnectionsCount, 1)
-}
-
-var (
-	ErrInternalHTTP2ClientNotFound        = errors.New("internalHTTP2Client not found")
-	ErrInternalHTTP2ClientIsNotHTTPClient = errors.New("internalHTTP2Client is not *http.Client")
-	ErrMalformedHTTPVersion               = errors.New(`net/http: HTTP/1.x transport connection broken: malformed HTTP version "HTTP/2"`)
-	ErrTemporary                          = errors.New("temporary error")
-)
-
-func setInternalHTTP2Transport(c *hqgohttp.Client, rt http.RoundTripper) (err error) {
-	// Get the pointer to the client's underlying value.
-	v := reflect.ValueOf(c).Elem()
-
-	field := v.FieldByName("internalHTTP2Client")
-
-	if !field.IsValid() {
-		err = ErrInternalHTTP2ClientNotFound
-
+// noWaitBackoff removes the wait between attempts, keeping retry tests fast.
+// The retry engine clamps the zero delay to its one-millisecond floor.
+func noWaitBackoff(_, _ time.Duration) (backoff hqgoretrierbackoff.Backoff) {
+	return func(int) (delay time.Duration) {
 		return
 	}
+}
 
-	// Make the unexported field addressable.
-	field = reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
+// readBody reads and closes a response body, failing the test on error.
+func readBody(t *testing.T, res *http.Response) (body string) {
+	t.Helper()
 
-	httpClient, ok := field.Interface().(*http.Client)
-	if !ok {
-		err = ErrInternalHTTP2ClientIsNotHTTPClient
+	data, err := io.ReadAll(res.Body)
 
-		return
-	}
+	require.NoError(t, err)
+	require.NoError(t, res.Body.Close())
 
-	httpClient.Transport = rt
+	body = string(data)
 
 	return
 }
@@ -80,365 +48,157 @@ func setInternalHTTP2Transport(c *hqgohttp.Client, rt http.RoundTripper) (err er
 func TestNewClient(t *testing.T) {
 	t.Parallel()
 
-	cfg := &hqgohttp.ClientConfiguration{
-		Client:               nil,
-		CloseIdleConnections: false,
-		Timeout:              10 * time.Second,
-		RetryMax:             2,
-		RetryWaitMin:         1 * time.Second,
-		RetryWaitMax:         2 * time.Second,
-		RetryPolicy:          nil,
-		RetryBackoff:         nil,
-		RespReadLimit:        4096,
-	}
-
-	client, err := hqgohttp.NewClient(cfg)
+	client, err := hqgohttp.NewClient()
 
 	require.NoError(t, err)
 	require.NotNil(t, client)
 }
 
-func TestDo(t *testing.T) {
+func TestNewClient_Options(t *testing.T) {
 	t.Parallel()
 
-	fakeRespBody := "Success"
-	fakeResp := &http.Response{
-		StatusCode: hqgohttpstatus.OK.Int(),
-		Body:       io.NopCloser(strings.NewReader(fakeRespBody)),
-	}
-	fakeRT := RoundTripFunc(func(_ *http.Request) (*http.Response, error) {
-		return fakeResp, nil
-	})
+	t.Run("nil HTTP client is ignored", func(t *testing.T) {
+		t.Parallel()
 
-	cfg := &hqgohttp.ClientConfiguration{
-		Timeout:              5 * time.Second,
-		RetryPolicy:          func(_ context.Context, _ error) (bool, error) { return false, nil },
-		RetryMax:             1,
-		RetryWaitMin:         0,
-		RetryWaitMax:         0,
-		CloseIdleConnections: false,
-		RespReadLimit:        4096,
-		Client:               &http.Client{Transport: fakeRT},
-	}
-
-	client, err := hqgohttp.NewClient(cfg)
-
-	require.NoError(t, err)
-
-	res, err := client.Request(&hqgohttp.RequestConfiguration{
-		Method: "GET",
-		URL:    "/test",
-	})
-
-	require.NoError(t, err)
-	assert.Equal(t, hqgohttpstatus.OK.Int(), res.StatusCode)
-
-	bodyBytes, err := io.ReadAll(res.Body)
-
-	_ = res.Body.Close()
-
-	require.NoError(t, err)
-	assert.Equal(t, fakeRespBody, string(bodyBytes))
-}
-
-func TestDoFallbackToHTTP2(t *testing.T) {
-	t.Parallel()
-
-	fallbackBody := "Fallback Success"
-	fallbackResp := &http.Response{
-		StatusCode: hqgohttpstatus.OK.Int(),
-		Body:       io.NopCloser(strings.NewReader(fallbackBody)),
-	}
-	fakeRT1 := RoundTripFunc(func(_ *http.Request) (res *http.Response, err error) {
-		err = ErrMalformedHTTPVersion
-
-		return
-	})
-	fakeRT2 := RoundTripFunc(func(_ *http.Request) (res *http.Response, err error) {
-		res = fallbackResp
-
-		return
-	})
-
-	cfg := &hqgohttp.ClientConfiguration{
-		Timeout:              5 * time.Second,
-		RetryPolicy:          func(_ context.Context, _ error) (bool, error) { return false, nil },
-		RetryMax:             1,
-		RetryWaitMin:         0,
-		RetryWaitMax:         0,
-		CloseIdleConnections: false,
-		RespReadLimit:        4096,
-		Client:               &http.Client{Transport: fakeRT1},
-	}
-
-	client, err := hqgohttp.NewClient(cfg)
-
-	require.NoError(t, err)
-
-	// Override the HTTP/2 client's transport.
-	err = setInternalHTTP2Transport(client, fakeRT2)
-
-	require.NoError(t, err)
-
-	// Issue the request.
-	res, err := client.Request(&hqgohttp.RequestConfiguration{
-		Method: "GET",
-		URL:    "/fallback",
-	})
-
-	require.NoError(t, err)
-	assert.Equal(t, hqgohttpstatus.OK.Int(), res.StatusCode)
-
-	bodyBytes, err := io.ReadAll(res.Body)
-
-	_ = res.Body.Close()
-
-	require.NoError(t, err)
-	assert.Equal(t, fallbackBody, string(bodyBytes))
-}
-
-func TestCloseIdleConnections(t *testing.T) {
-	t.Parallel()
-
-	// Setup a fake transport that counts CloseIdleConnections calls.
-	ft := &fakeTransport{
-		rt: RoundTripFunc(func(_ *http.Request) (res *http.Response, err error) {
-			res = &http.Response{
-				StatusCode: hqgohttpstatus.OK.Int(),
-				Body:       io.NopCloser(strings.NewReader("OK")),
-			}
-
-			return
-		}),
-	}
-
-	cfg := &hqgohttp.ClientConfiguration{
-		Timeout:              5 * time.Second,
-		RetryPolicy:          func(_ context.Context, _ error) (bool, error) { return false, nil },
-		RetryMax:             1,
-		RetryWaitMin:         0,
-		RetryWaitMax:         0,
-		CloseIdleConnections: true,
-		RespReadLimit:        4096,
-		Client:               &http.Client{Transport: ft},
-	}
-
-	client, err := hqgohttp.NewClient(cfg)
-
-	require.NoError(t, err)
-
-	// Issue 101 requests. The internal counter should cause CloseIdleConnections to be called once.
-	for range 101 {
-		res, err := client.Request(&hqgohttp.RequestConfiguration{
-			Method: "GET",
-			URL:    "/ping",
-		})
+		client, err := hqgohttp.NewClient(hqgohttp.WithHTTPClient(nil))
 
 		require.NoError(t, err)
-
-		_ = res.Body.Close()
-	}
-
-	assert.Equal(t, int32(1), atomic.LoadInt32(&ft.closeIdleConnectionsCount))
-}
-
-func TestExhaustedRetries(t *testing.T) {
-	t.Parallel()
-
-	// Fake transport that always returns an error.
-	fakeRT := RoundTripFunc(func(_ *http.Request) (res *http.Response, err error) {
-		err = ErrTemporary
-
-		return
+		require.NotNil(t, client)
 	})
 
-	cfg := &hqgohttp.ClientConfiguration{
-		Timeout: 5 * time.Second,
-		// Always retry.
-		RetryPolicy:          func(_ context.Context, _ error) (bool, error) { return true, nil },
-		RetryMax:             2, // Means total attempts = RetryMax + 1 (i.e. 3 attempts)
-		RetryWaitMin:         10 * time.Millisecond,
-		RetryWaitMax:         20 * time.Millisecond,
-		CloseIdleConnections: false,
-		RespReadLimit:        4096,
-		Client:               &http.Client{Transport: fakeRT},
-	}
+	t.Run("invalid values are normalized", func(t *testing.T) {
+		t.Parallel()
 
-	client, err := hqgohttp.NewClient(cfg)
+		client, err := hqgohttp.NewClient(
+			hqgohttp.WithTimeout(-time.Second),
+			hqgohttp.WithMaxRetries(-1),
+			hqgohttp.WithRetryWaitMin(-time.Second),
+			hqgohttp.WithRetryWaitMax(-time.Second),
+			hqgohttp.WithRetryBackoff(nil),
+			hqgohttp.WithRetryPolicy(nil),
+			hqgohttp.WithRateLimiter(nil),
+			hqgohttp.WithOnRequest(nil),
+			hqgohttp.WithOnResponse(nil),
+			hqgohttp.WithResponseReadLimit(-1),
+		)
+
+		require.NoError(t, err)
+		require.NotNil(t, client)
+	})
+}
+
+func TestClient_Do(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("do response"))
+	}))
+
+	t.Cleanup(server.Close)
+
+	client, err := hqgohttp.NewClient()
 
 	require.NoError(t, err)
 
-	// Issue the request.
-	res, err := client.Request(&hqgohttp.RequestConfiguration{
-		Method:  "GET",
-		BaseURL: "http://example.com",
-		URL:     "/retry",
-	})
+	req, err := hqgohttprequest.New(t.Context(), hqgohttpmethod.GET.String(), server.URL, nil)
 
-	// Expect error since all attempts fail.
+	require.NoError(t, err)
+
+	res, err := client.Do(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	assert.Equal(t, hqgohttpstatus.OK.Int(), res.StatusCode)
+	assert.Equal(t, "do response", readBody(t, res))
+}
+
+func TestClient_Do_NilRequest(t *testing.T) {
+	t.Parallel()
+
+	client, err := hqgohttp.NewClient()
+
+	require.NoError(t, err)
+
+	res, err := client.Do(t.Context(), nil)
+
 	require.Error(t, err)
-	assert.Nil(t, res)
-	assert.Contains(t, err.Error(), "giving up")
 
 	if res != nil {
-		_ = res.Body.Close()
+		require.NoError(t, res.Body.Close())
 	}
+
+	assert.Nil(t, res)
+	assert.Contains(t, err.Error(), "http.Client.Do:")
 }
 
-// TestRequestConfigurationMerging verifies that request configurations are correctly merged.
-// It tests that the BaseURL, relative URL, query parameters, and headers are combined as expected.
-func TestRequestConfigurationMerging(t *testing.T) {
+func TestClient_ConvenienceMethods(t *testing.T) {
 	t.Parallel()
 
-	var capturedURL string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		//nolint:gosec // Echoing the method and path in a test server is not an XSS vector.
+		_, _ = fmt.Fprintf(w, "%s %s", r.Method, r.URL.Path)
+	}))
 
-	var capturedHeaders http.Header
+	t.Cleanup(server.Close)
 
-	// Fake transport that captures the request URL and headers.
-	fakeRT := RoundTripFunc(func(req *http.Request) (res *http.Response, err error) {
-		capturedURL = req.URL.String()
-		capturedHeaders = req.Header
-
-		res = &http.Response{
-			StatusCode: hqgohttpstatus.OK.Int(),
-			Body:       io.NopCloser(strings.NewReader("merged")),
-		}
-
-		return
-	})
-
-	cfg := &hqgohttp.ClientConfiguration{
-		Timeout:              5 * time.Second,
-		RetryPolicy:          func(_ context.Context, _ error) (bool, error) { return false, nil },
-		RetryMax:             1,
-		RetryWaitMin:         0,
-		RetryWaitMax:         0,
-		CloseIdleConnections: false,
-		RespReadLimit:        4096,
-		Client:               &http.Client{Transport: fakeRT},
-		// Set some default values.
-		BaseURL: "http://example.com",
-		URL:     "default",
-		Headers: []hqgohttp.Header{
-			hqgohttp.NewSetHeader("X-Default", "defaultValue"),
-		},
-		Params: map[string]string{"default": "1"},
-	}
-
-	client, err := hqgohttp.NewClient(cfg)
-
-	require.NoError(t, err)
-
-	// Provide request-specific overrides.
-	res, err := client.Request(&hqgohttp.RequestConfiguration{
-		Method: "GET",
-		URL:    "api",
-		Headers: []hqgohttp.Header{
-			hqgohttp.NewSetHeader("X-Override", "overrideValue"),
-		},
-		Params: map[string]string{"q": "test"},
-	})
-
-	require.NoError(t, err)
-
-	// The final URL should be joined using url.JoinPath and include query parameters.
-	u, err := url.Parse(capturedURL)
-
-	require.NoError(t, err)
-	assert.Equal(t, "http", u.Scheme)
-	assert.Equal(t, "example.com", u.Host)
-	// Expect the path to be "default/api" (JoinPath behavior may vary).
-	assert.Contains(t, u.Path, "api")
-
-	// Query parameters should include both defaults and overrides.
-	q := u.Query()
-
-	assert.Equal(t, "1", q.Get("default"))
-	assert.Equal(t, "test", q.Get("q"))
-
-	// Headers should include both the default and override values.
-	assert.Equal(t, "defaultValue", capturedHeaders.Get("X-Default"))
-	assert.Equal(t, "overrideValue", capturedHeaders.Get("X-Override"))
-
-	_ = res.Body.Close()
-}
-
-func TestConvenienceMethods(t *testing.T) {
-	t.Parallel()
-
-	echoRT := RoundTripFunc(func(req *http.Request) (res *http.Response, err error) {
-		body := fmt.Sprintf("Method: %s, URL: %s", req.Method, req.URL.String())
-
-		res = &http.Response{
-			StatusCode: hqgohttpstatus.OK.Int(),
-			Body:       io.NopCloser(strings.NewReader(body)),
-		}
-
-		return
-	})
-
-	cfg := &hqgohttp.ClientConfiguration{
-		Timeout:              5 * time.Second,
-		RetryPolicy:          func(_ context.Context, _ error) (bool, error) { return false, nil },
-		RetryMax:             1,
-		RetryWaitMin:         0,
-		RetryWaitMax:         0,
-		CloseIdleConnections: false,
-		RespReadLimit:        4096,
-		Client:               &http.Client{Transport: echoRT},
-		BaseURL:              "http://example.com",
-	}
-
-	client, err := hqgohttp.NewClient(cfg)
+	client, err := hqgohttp.NewClient()
 
 	require.NoError(t, err)
 
 	tests := []struct {
-		name       string
-		callMethod func() (*http.Response, error)
-		expected   string
+		name     string
+		call     func(ctx context.Context, rawURL string) (*http.Response, error)
+		expected string
 	}{
 		{
 			name: "Get",
-			callMethod: func() (*http.Response, error) {
-				return client.Get("/get")
+			call: func(ctx context.Context, rawURL string) (*http.Response, error) {
+				return client.Get(ctx, rawURL)
 			},
-			expected: "Method: GET, URL: http://example.com/get",
+			expected: "GET /get",
 		},
 		{
 			name: "Head",
-			callMethod: func() (*http.Response, error) {
-				return client.Head("/head")
+			call: func(ctx context.Context, rawURL string) (*http.Response, error) {
+				return client.Head(ctx, rawURL)
 			},
-			expected: "Method: HEAD, URL: http://example.com/head",
-		},
-		{
-			name: "Put",
-			callMethod: func() (*http.Response, error) {
-				return client.Put("/put", "payload")
-			},
-			expected: "Method: PUT, URL: http://example.com/put",
-		},
-		{
-			name: "Delete",
-			callMethod: func() (*http.Response, error) {
-				return client.Delete("/delete")
-			},
-			expected: "Method: DELETE, URL: http://example.com/delete",
+			expected: "", // HEAD responses carry no body.
 		},
 		{
 			name: "Post",
-			callMethod: func() (*http.Response, error) {
-				return client.Post("/post", "payload")
+			call: func(ctx context.Context, rawURL string) (*http.Response, error) {
+				return client.Post(ctx, rawURL, "payload")
 			},
-			expected: "Method: POST, URL: http://example.com/post",
+			expected: "POST /post",
+		},
+		{
+			name: "Put",
+			call: func(ctx context.Context, rawURL string) (*http.Response, error) {
+				return client.Put(ctx, rawURL, "payload")
+			},
+			expected: "PUT /put",
+		},
+		{
+			name: "Patch",
+			call: func(ctx context.Context, rawURL string) (*http.Response, error) {
+				return client.Patch(ctx, rawURL, "payload")
+			},
+			expected: "PATCH /patch",
+		},
+		{
+			name: "Delete",
+			call: func(ctx context.Context, rawURL string) (*http.Response, error) {
+				return client.Delete(ctx, rawURL)
+			},
+			expected: "DELETE /delete",
 		},
 		{
 			name: "Options",
-			callMethod: func() (*http.Response, error) {
-				return client.Options("/options")
+			call: func(ctx context.Context, rawURL string) (*http.Response, error) {
+				return client.Options(ctx, rawURL)
 			},
-			expected: "Method: OPTIONS, URL: http://example.com/options",
+			expected: "OPTIONS /options",
 		},
 	}
 
@@ -446,17 +206,755 @@ func TestConvenienceMethods(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			res, err := tt.callMethod()
+			path := "/" + strings.ToLower(tt.name)
+
+			res, err := tt.call(t.Context(), server.URL+path)
 
 			require.NoError(t, err)
+			require.NotNil(t, res)
 
-			bodyBytes, err := io.ReadAll(res.Body)
-
-			require.NoError(t, err)
-
-			assert.Equal(t, tt.expected, string(bodyBytes))
-
-			_ = res.Body.Close()
+			assert.Equal(t, tt.expected, readBody(t, res))
 		})
 	}
+}
+
+func TestClient_RetriesServerErrors(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if attempts.Add(1) < 3 {
+			w.WriteHeader(hqgohttpstatus.InternalServerError.Int())
+
+			return
+		}
+
+		_, _ = w.Write([]byte("finally"))
+	}))
+
+	t.Cleanup(server.Close)
+
+	client, err := hqgohttp.NewClient(
+		hqgohttp.WithMaxRetries(3),
+		hqgohttp.WithRetryBackoff(noWaitBackoff),
+	)
+
+	require.NoError(t, err)
+
+	res, err := client.Get(t.Context(), server.URL)
+
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	assert.Equal(t, hqgohttpstatus.OK.Int(), res.StatusCode)
+	assert.Equal(t, "finally", readBody(t, res))
+	assert.Equal(t, int32(3), attempts.Load(), "Expected two failed attempts followed by a success")
+}
+
+func TestClient_Retries429HonoringRetryAfter(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if attempts.Add(1) == 1 {
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(hqgohttpstatus.TooManyRequests.Int())
+
+			return
+		}
+
+		_, _ = w.Write([]byte("after the wait"))
+	}))
+
+	t.Cleanup(server.Close)
+
+	client, err := hqgohttp.NewClient(
+		hqgohttp.WithMaxRetries(2),
+		hqgohttp.WithRetryWaitMax(30*time.Second),
+		hqgohttp.WithRetryBackoff(noWaitBackoff),
+	)
+
+	require.NoError(t, err)
+
+	start := time.Now()
+
+	res, err := client.Get(t.Context(), server.URL)
+
+	elapsed := time.Since(start)
+
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	assert.Equal(t, "after the wait", readBody(t, res))
+	assert.Equal(t, int32(2), attempts.Load())
+	assert.GreaterOrEqual(t, elapsed, time.Second,
+		"Expected the retry to honor the one-second Retry-After header")
+}
+
+func TestClient_RetryAfterIsCappedAtWaitMax(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if attempts.Add(1) == 1 {
+			w.Header().Set("Retry-After", "10")
+			w.WriteHeader(hqgohttpstatus.ServiceUnavailable.Int())
+
+			return
+		}
+
+		_, _ = w.Write([]byte("capped"))
+	}))
+
+	t.Cleanup(server.Close)
+
+	client, err := hqgohttp.NewClient(
+		hqgohttp.WithMaxRetries(1),
+		hqgohttp.WithRetryWaitMax(50*time.Millisecond),
+		hqgohttp.WithRetryBackoff(noWaitBackoff),
+	)
+
+	require.NoError(t, err)
+
+	start := time.Now()
+
+	res, err := client.Get(t.Context(), server.URL)
+
+	elapsed := time.Since(start)
+
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	assert.Equal(t, "capped", readBody(t, res))
+	assert.Equal(t, int32(2), attempts.Load())
+	assert.Less(t, elapsed, 5*time.Second,
+		"Expected the honored Retry-After wait to be capped at the maximum retry wait")
+}
+
+func TestClient_RetryPolicySeesResponse(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if attempts.Add(1) == 1 {
+			w.WriteHeader(hqgohttpstatus.InternalServerError.Int())
+
+			return
+		}
+
+		_, _ = w.Write([]byte("recovered"))
+	}))
+
+	t.Cleanup(server.Close)
+
+	var statuses []int
+
+	policy := func(_ context.Context, resp *http.Response, _ error) (retry bool, rerr error) {
+		if resp != nil {
+			statuses = append(statuses, resp.StatusCode)
+		}
+
+		if resp != nil && resp.StatusCode == hqgohttpstatus.InternalServerError.Int() {
+			retry = true
+		}
+
+		return
+	}
+
+	client, err := hqgohttp.NewClient(
+		hqgohttp.WithRetryPolicy(policy),
+		hqgohttp.WithRetryBackoff(noWaitBackoff),
+	)
+
+	require.NoError(t, err)
+
+	res, err := client.Get(t.Context(), server.URL)
+
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	assert.Equal(t, "recovered", readBody(t, res))
+	assert.Equal(t, []int{
+		hqgohttpstatus.InternalServerError.Int(),
+		hqgohttpstatus.OK.Int(),
+	}, statuses, "Expected the policy to observe every attempt's response")
+}
+
+func TestClient_RetryPolicyAbort(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(hqgohttpstatus.Teapot.Int())
+
+		_, _ = w.Write([]byte("short and stout"))
+	}))
+
+	t.Cleanup(server.Close)
+
+	errTeapot := errors.New("teapot detected")
+
+	policy := func(_ context.Context, resp *http.Response, _ error) (retry bool, rerr error) {
+		if resp != nil && resp.StatusCode == hqgohttpstatus.Teapot.Int() {
+			rerr = errTeapot
+		}
+
+		return
+	}
+
+	client, err := hqgohttp.NewClient(hqgohttp.WithRetryPolicy(policy))
+
+	require.NoError(t, err)
+
+	res, err := client.Get(t.Context(), server.URL)
+
+	require.ErrorIs(t, err, errTeapot)
+	require.NotNil(t, res, "Expected the attempt's response to be handed to the caller on a policy abort")
+
+	assert.Equal(t, "short and stout", readBody(t, res))
+}
+
+func TestClient_ExhaustedRetries(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts.Add(1)
+
+		w.WriteHeader(hqgohttpstatus.ServiceUnavailable.Int())
+	}))
+
+	t.Cleanup(server.Close)
+
+	client, err := hqgohttp.NewClient(
+		hqgohttp.WithMaxRetries(2),
+		hqgohttp.WithRetryBackoff(noWaitBackoff),
+	)
+
+	require.NoError(t, err)
+
+	res, err := client.Get(t.Context(), server.URL)
+
+	require.Error(t, err)
+
+	if res != nil {
+		require.NoError(t, res.Body.Close())
+	}
+
+	assert.Nil(t, res)
+	assert.Contains(t, err.Error(), "giving up after 3 attempt(s)")
+	assert.Contains(t, err.Error(), "503")
+	assert.Equal(t, int32(3), attempts.Load(),
+		"Expected the initial attempt plus two retries")
+}
+
+func TestClient_RequestOptionOverrides(t *testing.T) {
+	t.Parallel()
+
+	// newUnavailableServer starts an httptest server that always answers 503
+	// and counts its hits.
+	newUnavailableServer := func(t *testing.T) (serverURL string, attempts *atomic.Int32) {
+		t.Helper()
+
+		attempts = &atomic.Int32{}
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			attempts.Add(1)
+
+			w.WriteHeader(hqgohttpstatus.ServiceUnavailable.Int())
+		}))
+
+		t.Cleanup(server.Close)
+
+		serverURL = server.URL
+
+		return
+	}
+
+	t.Run("max retries override", func(t *testing.T) {
+		t.Parallel()
+
+		serverURL, attempts := newUnavailableServer(t)
+
+		client, err := hqgohttp.NewClient(
+			hqgohttp.WithMaxRetries(5),
+			hqgohttp.WithRetryBackoff(noWaitBackoff),
+		)
+
+		require.NoError(t, err)
+
+		res, err := client.Get(t.Context(), serverURL, hqgohttp.WithRequestMaxRetries(1))
+
+		require.Error(t, err)
+
+		if res != nil {
+			require.NoError(t, res.Body.Close())
+		}
+
+		assert.Nil(t, res)
+		assert.Equal(t, int32(2), attempts.Load(),
+			"Expected the per-request override to win over the client configuration")
+	})
+
+	t.Run("zero retries disables retrying", func(t *testing.T) {
+		t.Parallel()
+
+		serverURL, attempts := newUnavailableServer(t)
+
+		client, err := hqgohttp.NewClient(
+			hqgohttp.WithMaxRetries(5),
+			hqgohttp.WithRetryBackoff(noWaitBackoff),
+		)
+
+		require.NoError(t, err)
+
+		res, err := client.Get(t.Context(), serverURL, hqgohttp.WithRequestMaxRetries(0))
+
+		require.Error(t, err)
+
+		if res != nil {
+			require.NoError(t, res.Body.Close())
+		}
+
+		assert.Nil(t, res)
+		assert.Equal(t, int32(1), attempts.Load())
+	})
+}
+
+func TestClient_ContextCancellation(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-time.After(30 * time.Second):
+		}
+	}))
+
+	t.Cleanup(server.Close)
+
+	client, err := hqgohttp.NewClient(hqgohttp.WithTimeout(30 * time.Second))
+
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(t.Context())
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+
+		cancel()
+	}()
+
+	start := time.Now()
+
+	res, err := client.Get(ctx, server.URL)
+
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+
+	if res != nil {
+		require.NoError(t, res.Body.Close())
+	}
+
+	assert.Nil(t, res)
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Less(t, elapsed, 10*time.Second,
+		"Expected the cancellation to end the execution promptly")
+}
+
+func TestClient_Timeout(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-time.After(30 * time.Second):
+		}
+	}))
+
+	t.Cleanup(server.Close)
+
+	client, err := hqgohttp.NewClient(
+		hqgohttp.WithTimeout(150*time.Millisecond),
+		hqgohttp.WithRetryBackoff(noWaitBackoff),
+	)
+
+	require.NoError(t, err)
+
+	start := time.Now()
+
+	res, err := client.Get(t.Context(), server.URL)
+
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+
+	if res != nil {
+		require.NoError(t, res.Body.Close())
+	}
+
+	assert.Nil(t, res)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Less(t, elapsed, 10*time.Second,
+		"Expected the configured timeout to bound the execution")
+}
+
+// fakeRateLimiter is a RateLimiter counting its invocations, optionally
+// failing.
+//
+// Fields:
+//   - calls (*atomic.Int32): the number of Wait invocations.
+//   - err (error): the error Wait returns; nil means success.
+type fakeRateLimiter struct {
+	calls *atomic.Int32
+	err   error
+}
+
+// Compile-time guard ensuring [fakeRateLimiter] satisfies
+// [hqgohttp.RateLimiter].
+var _ hqgohttp.RateLimiter = (*fakeRateLimiter)(nil)
+
+// Wait counts the invocation and returns the configured error.
+func (l *fakeRateLimiter) Wait(_ context.Context) (err error) {
+	l.calls.Add(1)
+
+	err = l.err
+
+	return
+}
+
+func TestClient_RateLimiter(t *testing.T) {
+	t.Parallel()
+
+	t.Run("invoked before every attempt", func(t *testing.T) {
+		t.Parallel()
+
+		var attempts atomic.Int32
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			if attempts.Add(1) < 3 {
+				w.WriteHeader(hqgohttpstatus.InternalServerError.Int())
+
+				return
+			}
+
+			_, _ = w.Write([]byte("limited"))
+		}))
+
+		t.Cleanup(server.Close)
+
+		var calls atomic.Int32
+
+		limiter := &fakeRateLimiter{calls: &calls}
+
+		client, err := hqgohttp.NewClient(
+			hqgohttp.WithRateLimiter(limiter),
+			hqgohttp.WithRetryBackoff(noWaitBackoff),
+		)
+
+		require.NoError(t, err)
+
+		res, err := client.Get(t.Context(), server.URL)
+
+		require.NoError(t, err)
+		require.NotNil(t, res)
+
+		assert.Equal(t, "limited", readBody(t, res))
+		assert.Equal(t, int32(3), calls.Load(),
+			"Expected the limiter to be waited on once per attempt")
+	})
+
+	t.Run("failure aborts the execution", func(t *testing.T) {
+		t.Parallel()
+
+		errLimit := errors.New("limiter unavailable")
+
+		var calls atomic.Int32
+
+		limiter := &fakeRateLimiter{calls: &calls, err: errLimit}
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("unreachable"))
+		}))
+
+		t.Cleanup(server.Close)
+
+		client, err := hqgohttp.NewClient(hqgohttp.WithRateLimiter(limiter))
+
+		require.NoError(t, err)
+
+		res, err := client.Get(t.Context(), server.URL)
+
+		require.Error(t, err)
+
+		if res != nil {
+			require.NoError(t, res.Body.Close())
+		}
+
+		assert.Nil(t, res)
+		require.ErrorIs(t, err, errLimit)
+		assert.Equal(t, int32(1), calls.Load(),
+			"Expected the limiter failure to abort before any retry")
+	})
+}
+
+func TestClient_ObservabilityCallbacks(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if attempts.Add(1) == 1 {
+			w.WriteHeader(hqgohttpstatus.InternalServerError.Int())
+
+			return
+		}
+
+		_, _ = w.Write([]byte("observed"))
+	}))
+
+	t.Cleanup(server.Close)
+
+	var onRequestCalls, onResponseCalls atomic.Int32
+
+	var statuses []int
+
+	client, err := hqgohttp.NewClient(
+		hqgohttp.WithRetryBackoff(noWaitBackoff),
+		hqgohttp.WithOnRequest(func(req *http.Request) {
+			assert.NotNil(t, req)
+
+			onRequestCalls.Add(1)
+		}),
+		hqgohttp.WithOnResponse(func(resp *http.Response, _ error) {
+			onResponseCalls.Add(1)
+
+			if resp != nil {
+				statuses = append(statuses, resp.StatusCode)
+			}
+		}),
+	)
+
+	require.NoError(t, err)
+
+	res, err := client.Get(t.Context(), server.URL)
+
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	assert.Equal(t, "observed", readBody(t, res))
+	assert.Equal(t, int32(2), onRequestCalls.Load(),
+		"Expected the request callback once per attempt")
+	assert.Equal(t, int32(2), onResponseCalls.Load(),
+		"Expected the response callback once per attempt")
+	assert.Equal(t, []int{
+		hqgohttpstatus.InternalServerError.Int(),
+		hqgohttpstatus.OK.Int(),
+	}, statuses, "Expected the callback to observe every attempt's outcome")
+}
+
+func TestClient_MaxRequestsBeforeIdleClose(t *testing.T) {
+	t.Parallel()
+
+	var closes atomic.Int32
+
+	transport := &closeCountingTransport{closes: &closes}
+
+	client, err := hqgohttp.NewClient(
+		hqgohttp.WithHTTPClient(&http.Client{Transport: transport}),
+		hqgohttp.WithMaxRequestsBeforeIdleClose(2),
+	)
+
+	require.NoError(t, err)
+
+	for range 5 {
+		res, err := client.Get(t.Context(), "http://example.com/")
+
+		require.NoError(t, err)
+		require.NoError(t, res.Body.Close())
+	}
+
+	assert.Equal(t, int32(2), closes.Load(),
+		"Expected idle connections to be closed on the 2nd and 4th completed requests")
+}
+
+// closeCountingTransport is an http.RoundTripper answering 200 OK and
+// counting CloseIdleConnections calls.
+type closeCountingTransport struct {
+	closes *atomic.Int32
+}
+
+// RoundTrip answers every request with a 200 OK.
+func (t *closeCountingTransport) RoundTrip(_ *http.Request) (res *http.Response, err error) {
+	res = &http.Response{
+		StatusCode: http.StatusOK,
+		Status:     "200 OK",
+		Body:       io.NopCloser(strings.NewReader("OK")),
+		Header:     make(http.Header),
+	}
+
+	return
+}
+
+// CloseIdleConnections increments the close counter.
+func (t *closeCountingTransport) CloseIdleConnections() {
+	t.closes.Add(1)
+}
+
+func TestClient_UserAgent(t *testing.T) {
+	t.Parallel()
+
+	// newCaptureServer starts an httptest server recording the User-Agent of
+	// the last request it received, and returns its URL and the record.
+	newCaptureServer := func(t *testing.T) (serverURL string, captured *atomic.Value) {
+		t.Helper()
+
+		captured = &atomic.Value{}
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			captured.Store(r.UserAgent())
+
+			_, _ = w.Write([]byte("ua"))
+		}))
+
+		t.Cleanup(server.Close)
+
+		serverURL = server.URL
+
+		return
+	}
+
+	t.Run("default", func(t *testing.T) {
+		t.Parallel()
+
+		serverURL, captured := newCaptureServer(t)
+
+		client, err := hqgohttp.NewClient()
+
+		require.NoError(t, err)
+
+		res, err := client.Get(t.Context(), serverURL)
+
+		require.NoError(t, err)
+		require.NoError(t, res.Body.Close())
+		assert.Equal(t, hqgohttp.DefaultUserAgent, captured.Load())
+	})
+
+	t.Run("fixed", func(t *testing.T) {
+		t.Parallel()
+
+		serverURL, captured := newCaptureServer(t)
+
+		client, err := hqgohttp.NewClient(hqgohttp.WithUserAgent("custom-agent/1.0"))
+
+		require.NoError(t, err)
+
+		res, err := client.Get(t.Context(), serverURL)
+
+		require.NoError(t, err)
+		require.NoError(t, res.Body.Close())
+		assert.Equal(t, "custom-agent/1.0", captured.Load())
+	})
+
+	t.Run("random rotation draws from the curated list", func(t *testing.T) {
+		t.Parallel()
+
+		serverURL, captured := newCaptureServer(t)
+
+		client, err := hqgohttp.NewClient(hqgohttp.WithRandomUserAgent())
+
+		require.NoError(t, err)
+
+		res, err := client.Get(t.Context(), serverURL)
+
+		require.NoError(t, err)
+		require.NoError(t, res.Body.Close())
+
+		userAgent, ok := captured.Load().(string)
+
+		require.True(t, ok)
+		assert.Contains(t, hqgohttpuseragent.List(), userAgent)
+	})
+
+	t.Run("request header wins", func(t *testing.T) {
+		t.Parallel()
+
+		serverURL, captured := newCaptureServer(t)
+
+		client, err := hqgohttp.NewClient(hqgohttp.WithUserAgent("custom-agent/1.0"))
+
+		require.NoError(t, err)
+
+		res, err := client.NewRequest().
+			URL(serverURL).
+			SetHeader("User-Agent", "explicit-agent/2.0").
+			Do(t.Context())
+
+		require.NoError(t, err)
+		require.NoError(t, res.Body.Close())
+		assert.Equal(t, "explicit-agent/2.0", captured.Load())
+	})
+}
+
+func TestClient_ReusableBodyAcrossRetries(t *testing.T) {
+	t.Parallel()
+
+	var bodies []string
+
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err == nil {
+			bodies = append(bodies, string(body))
+		}
+
+		if attempts.Add(1) == 1 {
+			w.WriteHeader(hqgohttpstatus.InternalServerError.Int())
+
+			return
+		}
+
+		_, _ = w.Write([]byte("got it"))
+	}))
+
+	t.Cleanup(server.Close)
+
+	client, err := hqgohttp.NewClient(
+		hqgohttp.WithMaxRetries(1),
+		hqgohttp.WithRetryBackoff(noWaitBackoff),
+	)
+
+	require.NoError(t, err)
+
+	res, err := client.Post(t.Context(), server.URL, "the payload")
+
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	assert.Equal(t, "got it", readBody(t, res))
+	assert.Equal(t, []string{"the payload", "the payload"}, bodies,
+		"Expected every attempt to resend the full body")
+}
+
+func TestPackageLevelShortcuts(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("package level"))
+	}))
+
+	t.Cleanup(server.Close)
+
+	res, err := hqgohttp.Get(t.Context(), server.URL)
+
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	assert.Equal(t, "package level", readBody(t, res))
 }

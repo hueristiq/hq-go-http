@@ -1,30 +1,16 @@
-// Package status provides a strongly typed representation of HTTP status codes as defined by the IANA registry.
-// The status package defines the Status type, an alias for int, to represent HTTP status codes in a structured
-// and type-safe manner. In addition to exposing the raw numerical value of a status code via the Int() method,
-// the package offers a String() method that returns a human-readable description for each code.
+// Package status provides a strongly typed representation of HTTP status codes
+// as defined by the IANA registry.
 //
-// # Usage Example
+// It suits code that branches on response status codes, where comparing raw
+// integers obscures intent and invites magic numbers.
 //
-//	package main
+// # Entry points
 //
-//	import (
-//	    "fmt"
-//	    hqgohttpstatus "github.com/hueristiq/hq-go-http/status"
-//	)
+// The [Status] type is an int alias: Int returns the numeric code, String the
+// standard reason phrase, and the Is* methods — IsInformational, IsSuccess,
+// IsRedirection, IsClientError, IsServerError, IsError — classify a code by its
+// response class. The package constants cover the standard codes from 100
+// Continue through 511 Network Authentication Required.
 //
-//	func main() {
-//	    // Create a status using one of the predefined constants.
-//	    s := hqgohttpstatus.OK
-//	    fmt.Println("Status code:", s.Int())    // Output: 200
-//	    fmt.Println("Status text:", s.String())   // Output: "OK"
-//
-//	    // Check the category of the status code.
-//	    if s.IsSuccess() {
-//	        fmt.Println("The request was successful.")
-//	    }
-//	}
-//
-// Reference:
-//
-//	https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
+// The implementation relies on the Go standard library only.
 package status
