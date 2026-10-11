@@ -604,6 +604,41 @@ func TestClient_Timeout(t *testing.T) {
 		"Expected the configured timeout to bound the execution")
 }
 
+func TestClient_Do_ResponseBodyOutlivesExecution(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+
+		w.(http.Flusher).Flush()
+
+		// Hold the body back until well after Do has returned, so the caller's
+		// read below is in flight across Do's deferred cleanup: if Do cancels
+		// the timeout context on return, the read aborts with context canceled.
+		time.Sleep(200 * time.Millisecond)
+
+		_, _ = io.WriteString(w, "streamed body")
+	}))
+
+	t.Cleanup(server.Close)
+
+	client, err := hqgohttp.NewClient(hqgohttp.WithTimeout(30 * time.Second))
+
+	require.NoError(t, err)
+
+	res, err := client.Get(t.Context(), server.URL)
+
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	body, err := io.ReadAll(res.Body)
+
+	require.NoError(t, err)
+	require.NoError(t, res.Body.Close())
+
+	assert.Equal(t, "streamed body", string(body))
+}
+
 // fakeRateLimiter is a RateLimiter counting its invocations, optionally
 // failing.
 //
