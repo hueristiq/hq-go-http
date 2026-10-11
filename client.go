@@ -125,7 +125,9 @@ func NewClient(ofs ...ClientOptionFunc) (client *Client, err error) {
 // ctx, tightened by the configured timeout when the context carries no
 // earlier deadline. A nil ctx falls back to the request's own context;
 // otherwise req is shallow-copied onto ctx, so the caller's request is never
-// mutated.
+// mutated. A handed-out response body stays tied to that execution context:
+// the caller streams it after Do returns, and reads fail once ctx ends or
+// the configured timeout fires.
 //
 // Each attempt waits on the configured rate limiter, runs the OnRequest
 // callback, executes the request, runs the OnResponse callback, and consults
@@ -174,7 +176,14 @@ func (c *Client) Do(ctx context.Context, req *hqgohttprequest.Request, ofs ...Re
 
 		ctx, cancel = context.WithTimeout(ctx, c.timeout)
 
-		defer cancel()
+		// Cancel only when no response body is handed out: the caller
+		// streams a handed-out body after Do returns, and that body is
+		// tied to this context — canceling it would truncate the reads.
+		defer func() {
+			if res == nil {
+				cancel()
+			}
+		}()
 	}
 
 	req = &hqgohttprequest.Request{Request: req.WithContext(ctx)}
