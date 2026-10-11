@@ -15,34 +15,6 @@ import (
 func TestNew(t *testing.T) {
 	t.Parallel()
 
-	t.Run("ReusableReadCloser", func(t *testing.T) {
-		t.Parallel()
-
-		rr, err := hqgohttprequest.NewReusableReadCloser("value body")
-
-		require.NoError(t, err)
-		require.NotNil(t, rr)
-
-		req, err := hqgohttprequest.New(t.Context(), "POST", "http://example.com", *rr) //nolint:govet // The copy is intentional: it exercises the value-typed body case.
-
-		require.NoError(t, err)
-		require.NotNil(t, req)
-		require.NotNil(t, req.Body)
-
-		expected := "value body"
-
-		require.Equal(t, int64(len(expected)), req.ContentLength)
-
-		buf := make([]byte, len(expected))
-
-		n, err := req.Body.Read(buf)
-
-		require.NoError(t, err)
-
-		assert.Equal(t, len(expected), n)
-		assert.Equal(t, expected, string(buf[:n]))
-	})
-
 	t.Run("*ReusableReadCloser", func(t *testing.T) {
 		t.Parallel()
 
@@ -107,6 +79,27 @@ func TestNew(t *testing.T) {
 		require.NotNil(t, req)
 		require.Nil(t, req.Body)
 		require.Equal(t, int64(0), req.ContentLength)
+	})
+
+	t.Run("nil ctx", func(t *testing.T) {
+		t.Parallel()
+
+		var nilCtx context.Context
+
+		req, err := hqgohttprequest.New(nilCtx, "POST", "http://example.com", "nil ctx body")
+
+		require.NoError(t, err)
+		require.NotNil(t, req)
+		require.NotNil(t, req.Body)
+		require.Equal(t, int64(len("nil ctx body")), req.ContentLength)
+
+		buf := make([]byte, len("nil ctx body"))
+
+		n, err := req.Body.Read(buf)
+
+		require.NoError(t, err)
+
+		assert.Equal(t, "nil ctx body", string(buf[:n]))
 	})
 
 	t.Run("string body", func(t *testing.T) {

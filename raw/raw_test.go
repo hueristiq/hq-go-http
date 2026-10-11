@@ -187,8 +187,17 @@ func TestDo_Validation(t *testing.T) {
 func TestDo_DialFailure(t *testing.T) {
 	t.Parallel()
 
-	// Port 1 on the loopback interface is reserved and refuses connections.
-	res, err := hqgohttpraw.Do(t.Context(), "127.0.0.1:1", []byte("GET / HTTP/1.1\r\n\r\n"),
+	// Grab an ephemeral port and close the listener again: nothing is
+	// listening, so the dial is refused.
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+
+	require.NoError(t, err)
+
+	address := listener.Addr().String()
+
+	require.NoError(t, listener.Close())
+
+	res, err := hqgohttpraw.Do(t.Context(), address, []byte("GET / HTTP/1.1\r\n\r\n"),
 		hqgohttpraw.WithTimeout(time.Second))
 
 	require.Error(t, err)
@@ -199,6 +208,49 @@ func TestDo_DialFailure(t *testing.T) {
 
 	assert.Nil(t, res)
 	assert.Contains(t, err.Error(), "raw.Do:")
+}
+
+func TestDo_TimeoutBoundsTLSHandshake(t *testing.T) {
+	t.Parallel()
+
+	// The server accepts the TCP connection but never answers the TLS
+	// handshake, so only the exchange deadline can end the exchange.
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		_ = listener.Close()
+	})
+
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+
+		defer func() { _ = conn.Close() }()
+
+		_, _ = io.Copy(io.Discard, conn)
+	}()
+
+	start := time.Now()
+
+	res, err := hqgohttpraw.Do(t.Context(), listener.Addr().String(), []byte("GET / HTTP/1.1\r\nHost: x\r\n\r\n"),
+		hqgohttpraw.WithTLS(true),
+		hqgohttpraw.WithTimeout(300*time.Millisecond))
+
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+
+	if res != nil {
+		require.NoError(t, res.Body.Close())
+	}
+
+	assert.Nil(t, res)
+	assert.Less(t, elapsed, 5*time.Second,
+		"Expected the configured timeout to bound the TLS handshake")
 }
 
 func TestDo_ContextDeadline(t *testing.T) {

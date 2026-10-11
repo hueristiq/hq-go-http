@@ -1,9 +1,11 @@
 package http
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -109,6 +111,149 @@ func TestClient_Do_HTTP1BrokenTransportFallsBack(t *testing.T) {
 	assert.Equal(t, "fallback body", string(body))
 	assert.Equal(t, int32(1), primaryCalls.Load(), "Expected the primary client to be attempted once")
 	assert.Equal(t, int32(1), fallbackCalls.Load(), "Expected the fallback client to be used once")
+}
+
+//nolint:paralleltest // The test substitutes the package-level newFallbackHTTPClient seam, which is process-wide state.
+func TestClient_Do_FallbackResendsReusableBody(t *testing.T) {
+	var primaryCalls, fallbackCalls atomic.Int32
+
+	original := newFallbackHTTPClient
+
+	t.Cleanup(func() {
+		newFallbackHTTPClient = original
+	})
+
+	var fallbackBody string
+
+	newFallbackHTTPClient = func() (client *http.Client) {
+		client = &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (res *http.Response, err error) {
+				fallbackCalls.Add(1)
+
+				// Like a real transport, consume exactly ContentLength bytes:
+				// the reusable body never EOFs.
+				body, rerr := io.ReadAll(io.LimitReader(req.Body, req.ContentLength))
+				if rerr != nil {
+					err = rerr
+
+					return
+				}
+
+				fallbackBody = string(body)
+
+				res = newOKResponse("fallback body")
+
+				return
+			}),
+		}
+
+		return
+	}
+
+	primary := roundTripFunc(func(req *http.Request) (res *http.Response, err error) {
+		primaryCalls.Add(1)
+
+		// A real transport consumes the body before reporting the failure. The
+		// reusable body never EOFs, so consume exactly ContentLength bytes.
+		_, _ = io.Copy(io.Discard, io.LimitReader(req.Body, req.ContentLength))
+
+		err = errHTTP1Broken
+
+		return
+	})
+
+	client, err := NewClient(WithHTTPClient(&http.Client{Transport: primary}))
+
+	require.NoError(t, err)
+
+	req, err := hqgohttprequest.New(t.Context(), "POST", "http://example.com/", "the payload")
+
+	require.NoError(t, err)
+
+	res, err := client.Do(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	body, err := io.ReadAll(res.Body)
+
+	require.NoError(t, err)
+	require.NoError(t, res.Body.Close())
+
+	assert.Equal(t, "fallback body", string(body))
+	assert.Equal(t, "the payload", fallbackBody,
+		"Expected the fallback attempt to resend the full body")
+	assert.Equal(t, int32(1), primaryCalls.Load())
+	assert.Equal(t, int32(1), fallbackCalls.Load())
+}
+
+//nolint:paralleltest // The test substitutes the package-level newFallbackHTTPClient seam, which is process-wide state.
+func TestClient_Do_FallbackSkippedForNonResendableBody(t *testing.T) {
+	var fallbackCalls atomic.Int32
+
+	original := newFallbackHTTPClient
+
+	t.Cleanup(func() {
+		newFallbackHTTPClient = original
+	})
+
+	newFallbackHTTPClient = func() (client *http.Client) {
+		client = &http.Client{
+			Transport: roundTripFunc(func(_ *http.Request) (res *http.Response, err error) {
+				fallbackCalls.Add(1)
+
+				res = newOKResponse("fallback body")
+
+				return
+			}),
+		}
+
+		return
+	}
+
+	primary := roundTripFunc(func(req *http.Request) (res *http.Response, err error) {
+		// A real transport consumes the body before reporting the failure.
+		_, _ = io.Copy(io.Discard, req.Body)
+
+		err = errHTTP1Broken
+
+		return
+	})
+
+	// A policy that never retries keeps the attempt's original error visible.
+	client, err := NewClient(
+		WithHTTPClient(&http.Client{Transport: primary}),
+		WithRetryPolicy(func(_ context.Context, _ *http.Response, _ error) (retry bool, rerr error) {
+			return
+		}),
+	)
+
+	require.NoError(t, err)
+
+	parsedURL, err := url.Parse("http://example.com/")
+
+	require.NoError(t, err)
+
+	// A hand-built request whose body is neither reusable nor refetchable.
+	req := &hqgohttprequest.Request{Request: &http.Request{
+		Method:        http.MethodPost,
+		URL:           parsedURL,
+		Header:        make(http.Header),
+		Body:          io.NopCloser(strings.NewReader("not resendable")),
+		ContentLength: int64(len("not resendable")),
+	}}
+
+	res, err := client.Do(t.Context(), req)
+
+	require.ErrorIs(t, err, errHTTP1Broken)
+
+	if res != nil {
+		require.NoError(t, res.Body.Close())
+	}
+
+	assert.Nil(t, res)
+	assert.Zero(t, fallbackCalls.Load(),
+		"Expected the fallback to be skipped when the body cannot be resent")
 }
 
 //nolint:paralleltest // The test substitutes the package-level newFallbackHTTPClient seam, which is process-wide state.
@@ -288,4 +433,145 @@ func (t *closeCountingTransport) RoundTrip(_ *http.Request) (res *http.Response,
 // CloseIdleConnections increments the close counter.
 func (t *closeCountingTransport) CloseIdleConnections() {
 	t.closes.Add(1)
+}
+
+// countingReadCloser wraps a reader, counting the bytes read and recording
+// whether Close was called.
+//
+// Fields:
+//   - Reader (io.Reader): the underlying reader.
+//   - read (atomic.Int64): the number of bytes read.
+//   - closed (atomic.Bool): whether Close was called.
+type countingReadCloser struct {
+	io.Reader
+	read   atomic.Int64
+	closed atomic.Bool
+}
+
+// Read reads from the underlying reader and counts the bytes.
+//
+// Parameters:
+//   - p ([]byte): the buffer to read into.
+//
+// Returns:
+//   - n (int): the number of bytes read.
+//   - err (error): non-nil when the read fails.
+func (c *countingReadCloser) Read(p []byte) (n int, err error) {
+	n, err = c.Reader.Read(p)
+
+	c.read.Add(int64(n))
+
+	return
+}
+
+// Close records the close.
+//
+// Returns:
+//   - err (error): always nil.
+func (c *countingReadCloser) Close() (err error) {
+	c.closed.Store(true)
+
+	return
+}
+
+func TestClient_RetriedResponseBodyIsDrainedWithinLimit(t *testing.T) {
+	t.Parallel()
+
+	// newRetryingClient starts a client whose scripted transport answers 503
+	// with a large body on the first attempt and 200 on the second, and stores
+	// the first attempt's body into firstBody for inspection.
+	newRetryingClient := func(t *testing.T, firstBody **countingReadCloser) (client *Client) {
+		t.Helper()
+
+		var attempts atomic.Int32
+
+		transport := roundTripFunc(func(_ *http.Request) (res *http.Response, err error) {
+			if attempts.Add(1) == 1 {
+				*firstBody = &countingReadCloser{Reader: strings.NewReader(strings.Repeat("x", 1<<20))}
+
+				res = &http.Response{
+					StatusCode: http.StatusServiceUnavailable,
+					Status:     "503 Service Unavailable",
+					Header:     make(http.Header),
+					Body:       *firstBody,
+				}
+
+				return
+			}
+
+			res = newOKResponse("recovered")
+
+			return
+		})
+
+		client, err := NewClient(
+			WithHTTPClient(&http.Client{Transport: transport}),
+			WithRetryWaitMin(time.Millisecond),
+			WithRetryWaitMax(time.Millisecond),
+		)
+
+		require.NoError(t, err)
+
+		return
+	}
+
+	t.Run("client response read limit", func(t *testing.T) {
+		t.Parallel()
+
+		var firstBody *countingReadCloser
+
+		client := newRetryingClient(t, &firstBody)
+
+		req, err := hqgohttprequest.New(t.Context(), "GET", "http://example.com/", nil)
+
+		require.NoError(t, err)
+
+		res, err := client.Do(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, res)
+
+		body, err := io.ReadAll(res.Body)
+
+		require.NoError(t, err)
+		require.NoError(t, res.Body.Close())
+
+		assert.Equal(t, "recovered", string(body))
+		require.NotNil(t, firstBody)
+		assert.True(t, firstBody.closed.Load(), "Expected the retried response body to be closed")
+		assert.Positive(t, firstBody.read.Load(), "Expected the retried response body to be drained")
+		assert.LessOrEqual(t, firstBody.read.Load(), int64(DefaultResponseReadLimit),
+			"Expected the drain to be bounded by the response read limit")
+	})
+
+	t.Run("request response read limit override", func(t *testing.T) {
+		t.Parallel()
+
+		const limit int64 = 16
+
+		var firstBody *countingReadCloser
+
+		client := newRetryingClient(t, &firstBody)
+
+		req, err := hqgohttprequest.New(t.Context(), "GET", "http://example.com/", nil)
+
+		require.NoError(t, err)
+
+		res, err := client.Do(t.Context(), req, WithRequestResponseReadLimit(limit))
+
+		require.NoError(t, err)
+		require.NotNil(t, res)
+
+		body, err := io.ReadAll(res.Body)
+
+		require.NoError(t, err)
+		require.NoError(t, res.Body.Close())
+
+		assert.Equal(t, "recovered", string(body))
+		require.NotNil(t, firstBody)
+		assert.True(t, firstBody.closed.Load(), "Expected the retried response body to be closed")
+		assert.Positive(t, firstBody.read.Load(), "Expected the retried response body to be drained")
+		assert.LessOrEqual(t, firstBody.read.Load(), limit,
+			"Expected the drain to be bounded by the per-request override")
+	})
 }

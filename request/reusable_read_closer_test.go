@@ -56,6 +56,12 @@ func TestNewReusableReadCloser(t *testing.T) {
 			buf := make([]byte, len(tc.expectedOut))
 			n, err := reader.Read(buf)
 
+			if tc.expectedOut == "" {
+				require.ErrorIs(t, err, io.EOF, "Expected io.EOF for empty data")
+
+				return
+			}
+
 			require.NoError(t, err, "Unexpected read error")
 
 			assert.Equal(t, tc.expectedOut, string(buf[:n]), "Output does not match expected value")
@@ -104,9 +110,37 @@ func TestReusableReadCloser_EmptyData(t *testing.T) {
 
 	n, err := rrc.Read(buf)
 
-	require.NoError(t, err)
-
+	require.ErrorIs(t, err, io.EOF)
 	assert.Equal(t, 0, n)
+}
+
+func TestReusableReadCloser_Reset(t *testing.T) {
+	t.Parallel()
+
+	input := "reset me"
+
+	rrc, err := hqgohttprequest.NewReusableReadCloser(input)
+
+	require.NoError(t, err)
+	require.NotNil(t, rrc)
+
+	buf := make([]byte, 5)
+
+	n, err := rrc.Read(buf)
+
+	require.NoError(t, err)
+	assert.Equal(t, 5, n)
+	assert.Equal(t, input[:5], string(buf[:n]))
+
+	rrc.Reset()
+
+	buf2 := make([]byte, len(input))
+
+	n, err = rrc.Read(buf2)
+
+	require.NoError(t, err)
+	assert.Equal(t, len(input), n)
+	assert.Equal(t, input, string(buf2[:n]))
 }
 
 func TestReusableReadCloser_PartialRead(t *testing.T) {

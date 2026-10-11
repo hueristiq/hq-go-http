@@ -21,7 +21,7 @@
 
 - **Context-Aware Retries:** Every entry point honors the caller's context. The retry engine retries connection and transport errors, `429`, and `5xx` responses, and honors `Retry-After` headers (capped at the maximum retry wait). The retry policy sees the response *and* the error of every attempt.
 - **Fluent Request Builder:** Assemble requests with a chainable `Method().BaseURL().Path().Param().SetHeader().AddHeader().Body().Do(ctx)` API.
-- **HTTP/1.x and HTTP/2:** The primary client negotiates HTTP/2 automatically; when a cleartext HTTP/1.x exchange fails because the server answered with HTTP/2 frames, the attempt is retried once on an HTTP/2 fallback client.
+- **HTTP/1.x and HTTP/2:** The primary client negotiates HTTP/2 automatically; when a cleartext HTTP/1.x exchange fails because the server answered with HTTP/2 frames, the attempt is retried once on an HTTP/2 fallback client. The fallback resends the request: reusable bodies rewind, bodies exposing `GetBody` are refetched, and other bodies skip the fallback with the original error.
 - **Rate-Limiter Hook:** `WithRateLimiter` accepts any limiter with a `Wait(ctx) error` method — for example [hq-lib-limiter-go](https://github.com/hueristiq/hq-lib-limiter-go) — without imposing a module dependency.
 - **Observability Callbacks:** `WithOnRequest` and `WithOnResponse` run around every attempt, for logging, metrics, and tracing.
 - **Raw HTTP/1.x Requests:** The `raw` subpackage sends raw request bytes over dialed connections — no normalization, no pooling, one exchange per connection.

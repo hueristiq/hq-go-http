@@ -3,6 +3,7 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -30,24 +31,38 @@ type Link struct {
 //	<URL>; key1="value1"; key2="value2"; rel="relation"
 //
 // The URL is enclosed in angle brackets (`<` and `>`), followed by semicolon-separated
-// parameters. If the Rel field is non-empty, it is appended as a `rel="value"`
-// parameter. The method ensures proper quoting of parameter values to comply with
+// parameters. Parameter keys are emitted in sorted order for a deterministic
+// representation. If the Rel field is non-empty, it is appended as a `rel="value"`
+// parameter. When there are no parameters at all, no trailing "; " is emitted.
+// The method ensures proper quoting of parameter values to comply with
 // HTTP Link header syntax.
 //
 // Returns:
 //   - link (string): A formatted string representation of the Link.
 func (l Link) String() (link string) {
-	params := make([]string, 0, len(l.Params)+1)
+	keys := make([]string, 0, len(l.Params))
 
-	for k, v := range l.Params {
-		params = append(params, fmt.Sprintf("%s=%q", k, v))
+	for key := range l.Params {
+		keys = append(keys, key)
+	}
+
+	sort.Strings(keys)
+
+	params := make([]string, 0, len(keys)+1)
+
+	for _, key := range keys {
+		params = append(params, fmt.Sprintf("%s=%q", key, l.Params[key]))
 	}
 
 	if l.Rel != "" {
 		params = append(params, fmt.Sprintf("rel=%q", l.Rel))
 	}
 
-	link = fmt.Sprintf("<%s>; %s", l.URL, strings.Join(params, "; "))
+	if len(params) == 0 {
+		link = fmt.Sprintf("<%s>", l.URL)
+	} else {
+		link = fmt.Sprintf("<%s>; %s", l.URL, strings.Join(params, "; "))
+	}
 
 	return
 }
@@ -147,10 +162,12 @@ func (l Links) FilterByRel(rel string) (links Links) {
 //
 // The input string may contain one or more comma-separated link entries, each in
 // the format: `<URL>; param1="value1"; param2="value2"`. The function splits the
-// input into individual links, extracts the URL (enclosed in angle brackets), and
-// parses parameters, including the "rel" attribute (matched case-insensitively).
-// Parameter keys are kept exactly as written. If the input is empty or contains
-// only invalid entries, an empty Links slice is returned.
+// input into individual links at commas that appear outside angle brackets, so a
+// comma inside the URL (in its path or query) does not split an entry. It then
+// extracts the URL (enclosed in angle brackets) and parses parameters, including
+// the "rel" attribute (matched case-insensitively). Parameter keys are kept
+// exactly as written. If the input is empty or contains only invalid entries,
+// an empty Links slice is returned.
 //
 // Parameters:
 //   - raw (string): The raw HTTP Link header string to parse.
@@ -164,7 +181,7 @@ func Parse(raw string) (links Links) {
 
 	raw = strings.TrimSpace(raw)
 
-	for _, chunk := range strings.Split(raw, ",") {
+	for _, chunk := range splitLinkEntries(raw) {
 		chunk = strings.TrimSpace(chunk)
 		if chunk == "" {
 			continue
@@ -208,6 +225,40 @@ func Parse(raw string) (links Links) {
 			links = append(links, link)
 		}
 	}
+
+	return
+}
+
+// splitLinkEntries splits a raw Link header string into entries at commas
+// that appear outside angle brackets, so a comma inside a URL (in its path or
+// query) does not split an entry.
+//
+// Parameters:
+//   - raw (string): The raw Link header string.
+//
+// Returns:
+//   - entries ([]string): The comma-separated entries, trimmed.
+func splitLinkEntries(raw string) (entries []string) {
+	start := 0
+	depth := 0
+
+	for i, r := range raw {
+		switch r {
+		case '<':
+			depth++
+		case '>':
+			if depth > 0 {
+				depth--
+			}
+		case ',':
+			if depth == 0 {
+				entries = append(entries, strings.TrimSpace(raw[start:i]))
+				start = i + 1
+			}
+		}
+	}
+
+	entries = append(entries, strings.TrimSpace(raw[start:]))
 
 	return
 }

@@ -1,10 +1,12 @@
 package http_test
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -326,10 +328,10 @@ func TestRequestBuilder_Invalid(t *testing.T) {
 func TestRequestBuilder_WithOptions(t *testing.T) {
 	t.Parallel()
 
-	var attempts int32
+	var attempts atomic.Int32
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		attempts++
+		attempts.Add(1)
 
 		w.WriteHeader(hqgohttpstatus.ServiceUnavailable.Int())
 	}))
@@ -355,6 +357,29 @@ func TestRequestBuilder_WithOptions(t *testing.T) {
 	}
 
 	assert.Nil(t, res)
-	assert.Equal(t, int32(2), attempts,
+	assert.Equal(t, int32(2), attempts.Load(),
 		"Expected the builder-registered request options to override the client configuration")
+}
+
+func TestRequestBuilder_NilContext(t *testing.T) {
+	t.Parallel()
+
+	var mirror requestMirror
+
+	serverURL := newMirrorServer(t, &mirror)
+
+	client, err := hqgohttp.NewClient()
+
+	require.NoError(t, err)
+
+	var nilCtx context.Context
+
+	res, err := client.NewRequest().
+		URL(serverURL + "/nil-ctx").
+		Do(nilCtx)
+
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	assert.Equal(t, "GET /nil-ctx", readBody(t, res))
 }

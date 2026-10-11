@@ -74,8 +74,8 @@ func WithTLSConfig(config *tls.Config) (f OptionFunc) {
 }
 
 // WithTimeout returns an [OptionFunc] that bounds the whole exchange — dial,
-// write, and response read — when the context carries no earlier deadline.
-// Without any deadline the exchange can block forever.
+// TLS handshake, write, and response read — when the context carries no
+// earlier deadline. Without any deadline the exchange can block forever.
 //
 // Parameters:
 //   - timeout (time.Duration): the exchange bound. Values less than or equal
@@ -144,9 +144,9 @@ func (b *responseBody) Close() (err error) {
 // exchange gets one connection.
 //
 // The exchange is bounded by the earlier of the context's deadline and the
-// configured timeout; the bound covers reading the response body, so consume
-// it before the deadline passes. Closing the response body closes the
-// connection.
+// configured timeout; the bound covers the dial, the TLS handshake, writing,
+// and reading the response body, so consume it before the deadline passes.
+// Closing the response body closes the connection.
 //
 // Parameters:
 //   - ctx (context.Context): the context governing the exchange.
@@ -183,7 +183,20 @@ func Do(ctx context.Context, address string, request []byte, ofs ...OptionFunc) 
 		opts.timeout = DefaultTimeout
 	}
 
-	conn, err := dial(ctx, address, opts)
+	deadline := time.Now().Add(opts.timeout)
+
+	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
+		deadline = ctxDeadline
+	}
+
+	// The dial and the TLS handshake run under a context carrying the exchange
+	// deadline, so neither can outlive the bound the rest of the exchange
+	// observes.
+	dialCtx, cancel := context.WithDeadline(ctx, deadline)
+
+	defer cancel()
+
+	conn, err := dial(dialCtx, address, opts)
 	if err != nil {
 		err = fmt.Errorf("raw.Do: dialing %s: %w", address, err)
 
@@ -195,12 +208,6 @@ func Do(ctx context.Context, address string, request []byte, ofs ...OptionFunc) 
 			_ = conn.Close()
 		}
 	}()
-
-	deadline := time.Now().Add(opts.timeout)
-
-	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
-		deadline = ctxDeadline
-	}
 
 	_ = conn.SetDeadline(deadline)
 

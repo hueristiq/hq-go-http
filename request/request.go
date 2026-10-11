@@ -35,12 +35,13 @@ type Request struct {
 // The URL is parsed with a parser that applies the default scheme "http" when
 // none is given, so "example.com/path" is a valid URL. The body accepts a
 // string, a []byte, an io.Reader, an io.ReadSeeker, a *bytes.Buffer, a
-// func() (io.Reader, error), a ReusableReadCloser, or a *ReusableReadCloser;
-// it is buffered in memory and its length becomes the request's
-// ContentLength. A nil body means no body.
+// func() (io.Reader, error), or a *ReusableReadCloser; it is buffered in
+// memory and its length becomes the request's ContentLength. A nil body means
+// no body.
 //
 // Parameters:
-//   - ctx (context.Context): the context associated with the request.
+//   - ctx (context.Context): the context associated with the request. Nil
+//     means [context.Background].
 //   - method (string): the HTTP method (e.g., "GET", "POST"); empty means
 //     GET.
 //   - rawURL (string): the target URL for the request.
@@ -51,6 +52,8 @@ type Request struct {
 //   - err (error): non-nil when the URL does not parse or the body type is
 //     unsupported.
 func New(ctx context.Context, method, rawURL string, body any) (req *Request, err error) {
+	ctx = nonNilContext(ctx)
+
 	parsedURL, err := schemeDefaultingParser.Parse(rawURL)
 	if err != nil {
 		return
@@ -58,7 +61,7 @@ func New(ctx context.Context, method, rawURL string, body any) (req *Request, er
 
 	// The request is first built against a URL carrying only the scheme and
 	// host, and the parsed URL is then assigned directly: NewRequestWithContext
-	// parses its URL argument with url.Parse, which would strip patches the
+	// parses its URL argument with url.Parse, which would strip the patches the
 	// parser applied in unsafe mode (e.g. https://example.com/%invalid).
 	//
 	// This has no impact on the wire: the transport reads only the host from
@@ -87,12 +90,33 @@ func New(ctx context.Context, method, rawURL string, body any) (req *Request, er
 	return
 }
 
+// nonNilContext substitutes [context.Background] for a nil ctx, so [New]
+// accepts a nil context instead of panicking inside
+// http.NewRequestWithContext.
+//
+// Parameters:
+//   - ctx (context.Context): the context to normalize.
+//
+// Returns:
+//   - normalized (context.Context): ctx, or [context.Background] when ctx is
+//     nil.
+func nonNilContext(ctx context.Context) (normalized context.Context) {
+	if ctx == nil {
+		normalized = context.Background()
+
+		return
+	}
+
+	normalized = ctx
+
+	return
+}
+
 // getReusableBodyReadCloser converts the provided raw input into a reusable
 // ReadCloser.
 //
 // Supported types include:
-//   - ReusableReadCloser: if raw is a value of this type, its address is taken.
-//   - *ReusableReadCloser: if raw is already a pointer, it is used directly.
+//   - *ReusableReadCloser: used directly.
 //   - func() (io.Reader, error): the function is invoked to obtain an
 //     io.Reader, which is then converted via NewReusableReadCloser.
 //   - Other types: raw is passed to NewReusableReadCloser, which supports a
@@ -112,8 +136,6 @@ func getReusableBodyReadCloser(raw any) (reader *ReusableReadCloser, err error) 
 	}
 
 	switch body := raw.(type) {
-	case ReusableReadCloser:
-		reader = &body
 	case *ReusableReadCloser:
 		reader = body
 	case func() (io.Reader, error):

@@ -23,11 +23,8 @@ func TestLink_String(t *testing.T) {
 
 	str := link.String()
 
-	assert.Contains(t, str, "<http://example.com>")
-	assert.Contains(t, str, `foo="bar"`)
-	assert.Contains(t, str, `baz="qux"`)
-	assert.Contains(t, str, `rel="next"`)
-	assert.Contains(t, str, "; ")
+	// Parameter keys are emitted in sorted order, followed by rel.
+	assert.Equal(t, `<http://example.com>; baz="qux"; foo="bar"; rel="next"`, str)
 }
 
 func TestLink_String_EmptyRelAndParams(t *testing.T) {
@@ -41,7 +38,7 @@ func TestLink_String_EmptyRelAndParams(t *testing.T) {
 
 	str := link.String()
 
-	assert.Equal(t, "<http://example.com>; ", str)
+	assert.Equal(t, "<http://example.com>", str)
 }
 
 func TestLink_HasParam(t *testing.T) {
@@ -175,6 +172,22 @@ func TestParse(t *testing.T) {
 					URL:    "http://example.org",
 					Rel:    "prev",
 					Params: map[string]string{"baz": "qux"},
+				},
+			},
+		},
+		{
+			name: "comma inside URL",
+			raw:  `<http://example.com/a,b?x=1,y=2>; rel="next", <http://example.org/z>; rel="prev"`,
+			expected: hqgohttpheaderutils.Links{
+				{
+					URL:    "http://example.com/a,b?x=1,y=2",
+					Rel:    "next",
+					Params: map[string]string{},
+				},
+				{
+					URL:    "http://example.org/z",
+					Rel:    "prev",
+					Params: map[string]string{},
 				},
 			},
 		},

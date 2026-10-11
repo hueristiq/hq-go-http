@@ -155,9 +155,13 @@ const (
 	XPingback                       Header = "X-Pingback"
 	XPermittedCrossDomainPolicies   Header = "X-Permitted-Cross-Domain-Policies"
 	XPoweredBy                      Header = "X-Powered-By"
-	XRequestedWith                  Header = "X-Requested-With"
-	XRobotsTag                      Header = "X-Robots-Tag"
-	XUACompatible                   Header = "X-UA-Compatible"
-	XXSSProtection                  Header = "X-XSS-Protection"
-	XRatelimitRemaining             Header = "X-Ratelimit-Remaining"
+	XRateLimitRemaining             Header = "X-RateLimit-Remaining"
+
+	// Deprecated: the canonical casing is XRateLimitRemaining.
+	XRatelimitRemaining Header = "X-RateLimit-Remaining"
+
+	XRequestedWith Header = "X-Requested-With"
+	XRobotsTag     Header = "X-Robots-Tag"
+	XUACompatible  Header = "X-UA-Compatible"
+	XXSSProtection Header = "X-XSS-Protection"
 )

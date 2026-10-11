@@ -13,6 +13,12 @@ import (
 // byte slice and a bytes.Reader. It allows repeated reads of the same data by automatically
 // resetting the reader's position to the beginning when the end of the data is reached.
 //
+// The rewind makes the closer safe only under a length-bounded consumer, such
+// as an *http.Request body with a known ContentLength: the consumer stops
+// after the announced number of bytes, so the reader never loops. Do not pass
+// it to io.ReadAll, io.Copy, or any other consumer that reads until io.EOF —
+// the reader rewinds instead of ending, and such a read never terminates.
+//
 // Fields:
 //   - mu (sync.Mutex): A mutex to ensure thread-safe operations on the internal state.
 //   - data ([]byte): The complete byte slice containing the data to be read.
@@ -27,8 +33,12 @@ type ReusableReadCloser struct {
 // It implements the io.Reader interface. When the end of the data is reached (EOF),
 // the reader automatically resets to the beginning, allowing the data to be read repeatedly.
 //
+// The rewind means a consumer that reads until io.EOF never finishes: only
+// read it through a length-bounded consumer such as an *http.Request body
+// with a known ContentLength. Never pass it to io.ReadAll or io.Copy.
+//
 // Behavior:
-//  1. If the internal data is empty, Read returns 0 and no error.
+//  1. If the internal data is empty, Read returns 0 and io.EOF.
 //  2. Data is read from the bytes.Reader into p.
 //  3. When an EOF is encountered:
 //     - If some data has been read (n > 0), the reader resets and the EOF error is suppressed.
@@ -48,7 +58,7 @@ func (r *ReusableReadCloser) Read(p []byte) (n int, err error) {
 	defer r.mu.Unlock()
 
 	if len(r.data) == 0 {
-		return
+		return 0, io.EOF
 	}
 
 	n, err = r.reader.Read(p)
@@ -67,10 +77,23 @@ func (r *ReusableReadCloser) Read(p []byte) (n int, err error) {
 	return
 }
 
+// Reset rewinds the reader to the beginning of the data, so the next Read
+// returns the payload from the start. It exists for consumers that want to
+// resend the body on demand — for example an HTTP/2 fallback attempt — instead
+// of relying on the automatic rewind.
+func (r *ReusableReadCloser) Reset() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.reset()
+}
+
 // reset repositions the internal bytes.Reader to the beginning of the data.
 // This helper function is invoked when EOF is encountered to allow the data
 // to be read again from the start. Any errors from Seek are ignored because
 // the operation is guaranteed to succeed with an in‑memory data source.
+//
+// The caller must hold r.mu.
 func (r *ReusableReadCloser) reset() {
 	_, _ = r.reader.Seek(0, io.SeekStart)
 }
@@ -98,13 +121,13 @@ func (r *ReusableReadCloser) Close() (err error) {
 //     Reads the entire content into a byte slice using io.ReadAll.
 //
 // Parameters:
-//   - raw (interface{}): The input data to be converted to a byte slice. The function handles
+//   - raw (any): The input data to be converted to a byte slice. The function handles
 //     the conversion based on the dynamic type of the input.
 //
 // Returns:
 //   - reusableReadCloser (*ReusableReadCloser): A pointer to the newly created ReusableReadCloser instance.
 //   - err (error): An error if the input type is unsupported or if an error occurs during data reading.
-func NewReusableReadCloser(raw interface{}) (reusableReadCloser *ReusableReadCloser, err error) {
+func NewReusableReadCloser(raw any) (reusableReadCloser *ReusableReadCloser, err error) {
 	var data []byte
 
 	switch v := raw.(type) {

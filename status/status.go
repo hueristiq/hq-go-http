@@ -86,9 +86,7 @@ func (s Status) IsRedirection() (isRedirection bool) {
 // Returns:
 //   - isError (bool): True if s is in the 4xx or 5xx range, false otherwise.
 func (s Status) IsError() (isError bool) {
-	isError = s.IsClientError() || s.IsServerError()
-
-	return
+	return s.IsClientError() || s.IsServerError()
 }
 
 // IsClientError checks if the status code indicates a client error (4xx).
@@ -164,6 +162,7 @@ const (
 	UnprocessableEntity           Status = 422
 	Locked                        Status = 423
 	FailedDependency              Status = 424
+	TooEarly                      Status = 425
 	UpgradeRequired               Status = 426
 	PreconditionRequired          Status = 428
 	TooManyRequests               Status = 429
