@@ -18,9 +18,9 @@
 // Behavior is set through functional options:
 //
 //   - [WithTLS] and [WithTLSConfig] wrap the connection in TLS.
-//   - [WithTimeout] bounds the exchange — dial, write, and response read —
-//     when the context carries no earlier deadline; [DefaultTimeout] applies
-//     otherwise.
+//   - [WithTimeout] bounds the exchange — dial, TLS handshake, write, and
+//     response read — when the context carries no earlier deadline;
+//     [DefaultTimeout] applies otherwise.
 //
 // The implementation relies on the Go standard library only.
 package raw

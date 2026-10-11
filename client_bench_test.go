@@ -87,6 +87,8 @@ func Benchmark_Client_Get(b *testing.B) {
 			b.Fatalf("Expected no error, got %v", err)
 		}
 
+		_, _ = io.Copy(io.Discard, res.Body)
+
 		_ = res.Body.Close()
 	}
 
@@ -125,6 +127,8 @@ func Benchmark_RequestBuilder_Do(b *testing.B) {
 		if err != nil {
 			b.Fatalf("Expected no error, got %v", err)
 		}
+
+		_, _ = io.Copy(io.Discard, res.Body)
 
 		_ = res.Body.Close()
 	}

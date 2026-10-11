@@ -132,6 +132,67 @@ func TestClient_Do_NilRequest(t *testing.T) {
 	assert.Contains(t, err.Error(), "http.Client.Do:")
 }
 
+func TestClient_PostEmptyBody(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+
+		_, _ = w.Write(body)
+	}))
+
+	t.Cleanup(server.Close)
+
+	client, err := hqgohttp.NewClient()
+
+	require.NoError(t, err)
+
+	for name, body := range map[string]any{
+		"empty string": "",
+		"empty []byte": []byte{},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			start := time.Now()
+
+			res, err := client.Post(t.Context(), server.URL, body)
+
+			elapsed := time.Since(start)
+
+			require.NoError(t, err)
+			require.NotNil(t, res)
+
+			assert.Empty(t, readBody(t, res))
+			assert.Less(t, elapsed, 10*time.Second,
+				"Expected the empty-body request to complete promptly")
+		})
+	}
+}
+
+func TestClient_NilContext(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("nil ctx"))
+	}))
+
+	t.Cleanup(server.Close)
+
+	client, err := hqgohttp.NewClient()
+
+	require.NoError(t, err)
+
+	var nilCtx context.Context
+
+	res, err := client.Get(nilCtx, server.URL)
+
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	assert.Equal(t, "nil ctx", readBody(t, res))
+}
+
 func TestClient_ConvenienceMethods(t *testing.T) {
 	t.Parallel()
 
@@ -528,7 +589,14 @@ func TestClient_RequestOptionOverrides(t *testing.T) {
 func TestClient_ContextCancellation(t *testing.T) {
 	t.Parallel()
 
+	requestReceived := make(chan struct{}, 1)
+
 	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		select {
+		case requestReceived <- struct{}{}:
+		default:
+		}
+
 		select {
 		case <-r.Context().Done():
 		case <-time.After(30 * time.Second):
@@ -543,8 +611,14 @@ func TestClient_ContextCancellation(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 
+	defer cancel()
+
 	go func() {
-		time.Sleep(100 * time.Millisecond)
+		select {
+		case <-requestReceived:
+		case <-t.Context().Done():
+			return
+		}
 
 		cancel()
 	}()
@@ -645,9 +719,11 @@ func TestClient_Do_ResponseBodyOutlivesExecution(t *testing.T) {
 // Fields:
 //   - calls (*atomic.Int32): the number of Wait invocations.
 //   - err (error): the error Wait returns; nil means success.
+//   - onWait (func()): an optional callback run by Wait before returning.
 type fakeRateLimiter struct {
-	calls *atomic.Int32
-	err   error
+	calls  *atomic.Int32
+	err    error
+	onWait func()
 }
 
 // Compile-time guard ensuring [fakeRateLimiter] satisfies
@@ -657,6 +733,10 @@ var _ hqgohttp.RateLimiter = (*fakeRateLimiter)(nil)
 // Wait counts the invocation and returns the configured error.
 func (l *fakeRateLimiter) Wait(_ context.Context) (err error) {
 	l.calls.Add(1)
+
+	if l.onWait != nil {
+		l.onWait()
+	}
 
 	err = l.err
 
@@ -733,6 +813,44 @@ func TestClient_RateLimiter(t *testing.T) {
 
 		assert.Nil(t, res)
 		require.ErrorIs(t, err, errLimit)
+		assert.Equal(t, int32(1), calls.Load(),
+			"Expected the limiter failure to abort before any retry")
+	})
+
+	t.Run("context error wins over the limiter failure", func(t *testing.T) {
+		t.Parallel()
+
+		errLimit := errors.New("limiter unavailable")
+
+		ctx, cancel := context.WithCancel(t.Context())
+
+		defer cancel()
+
+		var calls atomic.Int32
+
+		limiter := &fakeRateLimiter{calls: &calls, err: errLimit, onWait: cancel}
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("unreachable"))
+		}))
+
+		t.Cleanup(server.Close)
+
+		client, err := hqgohttp.NewClient(hqgohttp.WithRateLimiter(limiter))
+
+		require.NoError(t, err)
+
+		res, err := client.Get(ctx, server.URL)
+
+		require.Error(t, err)
+
+		if res != nil {
+			require.NoError(t, res.Body.Close())
+		}
+
+		assert.Nil(t, res)
+		require.ErrorIs(t, err, context.Canceled)
+		require.NotErrorIs(t, err, errLimit)
 		assert.Equal(t, int32(1), calls.Load(),
 			"Expected the limiter failure to abort before any retry")
 	})

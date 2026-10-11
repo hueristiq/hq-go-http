@@ -61,7 +61,9 @@
 // HTTP/1.x exchange fails because the server answered with HTTP/2 frames —
 // net/http reports an unexported, message-only error — the attempt is retried
 // once on a fallback client configured for HTTP/2 before the retry policy is
-// consulted.
+// consulted. The fallback resends the request: a reusable body is rewound and
+// a body exposing GetBody is refetched; when the body provides neither, the
+// fallback is skipped and the original error is returned.
 //
 // # Context
 //

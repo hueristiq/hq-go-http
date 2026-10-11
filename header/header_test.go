@@ -26,6 +26,8 @@ func TestHeader_String(t *testing.T) {
 		{"WWWAuthenticate", hqgohttpheader.WWWAuthenticate, "WWW-Authenticate"},
 		{"XContentTypeOptions", hqgohttpheader.XContentTypeOptions, "X-Content-Type-Options"},
 		{"XForwardedFor", hqgohttpheader.XForwardedFor, "X-Forwarded-For"},
+		{"XRateLimitRemaining", hqgohttpheader.XRateLimitRemaining, "X-RateLimit-Remaining"},
+		{"XRatelimitRemaining (deprecated)", hqgohttpheader.XRatelimitRemaining, "X-RateLimit-Remaining"},
 	}
 
 	for _, tt := range tests {

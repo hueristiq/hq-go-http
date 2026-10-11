@@ -171,7 +171,7 @@ func (b *RequestBuilder) AddHeader(key, value string) *RequestBuilder {
 
 // Body sets the request payload, in any form the request package accepts: a
 // string, a []byte, an io.Reader, an io.ReadSeeker, a *bytes.Buffer, a
-// func() (io.Reader, error), or a ReusableReadCloser. The body is buffered,
+// func() (io.Reader, error), or a *ReusableReadCloser. The body is buffered,
 // so every retry attempt resends it in full.
 //
 // Parameters:

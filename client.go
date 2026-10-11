@@ -135,7 +135,9 @@ func NewClient(ofs ...ClientOptionFunc) (client *Client, err error) {
 // [Client.NewRequest] is reusable, so every attempt resends it in full. When
 // the primary client fails with the HTTP/1.x transport broken error, the
 // attempt is retried once on the HTTP/2 fallback client before the policy is
-// consulted.
+// consulted. The fallback resends the request: a reusable body is rewound and
+// a body exposing GetBody is refetched; when the body provides neither, the
+// fallback is skipped and the original error is returned.
 //
 // Outcomes:
 //   - Success: the final response with its body open — the caller owns and
@@ -143,7 +145,8 @@ func NewClient(ofs ...ClientOptionFunc) (client *Client, err error) {
 //   - Attempts exhausted on retryable failures: a nil response and a
 //     "giving up" error wrapping the last failure. The last response's body
 //     was drained and closed.
-//   - Context done: a nil response and the context's error.
+//   - Context done: a nil response and the context's error. A rate limiter
+//     failing because the context ended reports the context's error too.
 //   - Retry policy abort (non-nil rerr): the attempt's response — body open,
 //     caller-owned — and rerr.
 //
@@ -198,7 +201,11 @@ func (c *Client) Do(ctx context.Context, req *hqgohttprequest.Request, ofs ...Re
 
 		if opts.rateLimiter != nil {
 			if werr := opts.rateLimiter.Wait(ctx); werr != nil {
-				attemptErr = fmt.Errorf("http.Client.Do: waiting on rate limiter: %w", werr)
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					attemptErr = ctxErr
+				} else {
+					attemptErr = fmt.Errorf("http.Client.Do: waiting on rate limiter: %w", werr)
+				}
 
 				return
 			}
@@ -210,7 +217,7 @@ func (c *Client) Do(ctx context.Context, req *hqgohttprequest.Request, ofs ...Re
 
 		attemptRes, attemptErr = c.httpClient.Do(req.Request)
 
-		if attemptErr != nil && isHTTP1BrokenTransportError(attemptErr) {
+		if attemptErr != nil && isHTTP1BrokenTransportError(attemptErr) && rewindRequestBody(req.Request) {
 			attemptRes, attemptErr = c.fallbackHTTPClient.Do(req.Request)
 		}
 
@@ -219,7 +226,7 @@ func (c *Client) Do(ctx context.Context, req *hqgohttprequest.Request, ofs ...Re
 		}
 
 		if attemptRes == nil && attemptErr == nil {
-			attemptErr = errors.New("the transport returned neither a response nor an error")
+			attemptErr = errors.New("http.Client.Do: the transport returned neither a response nor an error")
 		}
 
 		retry, rerr := opts.retryPolicy(ctx, attemptRes, attemptErr)
@@ -242,7 +249,7 @@ func (c *Client) Do(ctx context.Context, req *hqgohttprequest.Request, ofs ...Re
 		}
 
 		if attemptErr == nil {
-			attemptErr = fmt.Errorf("unexpected HTTP status %s", attemptRes.Status)
+			attemptErr = fmt.Errorf("http.Client.Do: unexpected HTTP status %s", attemptRes.Status)
 		}
 
 		attemptErr = &retryableError{err: attemptErr}
@@ -400,7 +407,7 @@ func (c *Client) Head(ctx context.Context, rawURL string, ofs ...RequestOptionFu
 //
 // The body accepts the types supported by the request package: a string, a
 // []byte, an io.Reader, an io.ReadSeeker, a *bytes.Buffer, a
-// func() (io.Reader, error), or a ReusableReadCloser.
+// func() (io.Reader, error), or a *ReusableReadCloser.
 //
 // Parameters:
 //   - ctx (context.Context): the context governing the whole execution.
@@ -532,6 +539,48 @@ func isMarkedRetryable(err error) (retry bool) {
 func isHTTP1BrokenTransportError(err error) (broken bool) {
 	broken = err != nil &&
 		strings.Contains(err.Error(), `net/http: HTTP/1.x transport connection broken: malformed HTTP version "HTTP/2"`)
+
+	return
+}
+
+// rewindRequestBody makes req's body resendable after a first attempt, so the
+// HTTP/2 fallback client can send the request again on a fresh connection.
+//
+// A body with nothing to rewind — nil or [http.NoBody] — is always resendable.
+// A [*hqgohttprequest.ReusableReadCloser] body is rewound in place. Any other
+// body is refetched through GetBody; without GetBody the body is consumed and
+// the fallback must be skipped.
+//
+// Parameters:
+//   - req (*http.Request): the request whose body is prepared for resending.
+//
+// Returns:
+//   - ok (bool): true when the body can be sent again.
+func rewindRequestBody(req *http.Request) (ok bool) {
+	if req.Body == nil || req.Body == http.NoBody {
+		ok = true
+
+		return
+	}
+
+	if reusable, isReusable := req.Body.(*hqgohttprequest.ReusableReadCloser); isReusable {
+		reusable.Reset()
+
+		ok = true
+
+		return
+	}
+
+	if req.GetBody != nil {
+		body, err := req.GetBody()
+		if err != nil {
+			return
+		}
+
+		req.Body = body
+
+		ok = true
+	}
 
 	return
 }

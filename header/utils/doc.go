@@ -14,9 +14,9 @@
 // target URL, relation type, and parameters — and [ParseMultiple] merges several
 // Link header lines into one collection. The parsing semantics follow
 // github.com/tomnomnom/linkheader: parameter keys are kept exactly as written,
-// and the "rel" attribute is matched case-insensitively. Note the shared
-// limitation: quoted parameter values containing a comma or a semicolon are not
-// split correctly.
+// and the "rel" attribute is matched case-insensitively. Commas inside the
+// angle-bracketed URL are preserved. Note the shared limitation: quoted
+// parameter values containing a comma or a semicolon are not split correctly.
 //
 // The implementation relies on the Go standard library only.
 package utils
